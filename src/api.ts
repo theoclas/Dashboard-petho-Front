@@ -94,6 +94,7 @@ export const importFile = (
   formData.append('file', file);
   return api.post(`/import/${endpoint}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 1800000, // 30 minutos de timeout
     onUploadProgress: (e) => {
       if (onProgress && e.total) {
         onProgress(Math.round((e.loaded * 100) / e.total));
