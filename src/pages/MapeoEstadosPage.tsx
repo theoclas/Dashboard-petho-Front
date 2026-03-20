@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-  Table, Button, Modal, Form, Input, Space, Typography, message, Popconfirm, Tag,
+  Table, Button, Modal, Form, Input, Space, Typography, message, Popconfirm, Tag, Upload
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { getMapeoEstados, createMapeoEstado, updateMapeoEstado, deleteMapeoEstado } from '../api';
+import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import { getMapeoEstados, createMapeoEstado, updateMapeoEstado, deleteMapeoEstado, importFile } from '../api';
 
 const { Title } = Typography;
 
@@ -57,6 +57,19 @@ export default function MapeoEstadosPage() {
     } catch {
       message.error('Error eliminando mapeo');
     }
+  };
+
+  const handleUpload = async (file: File) => {
+    setLoading(true);
+    try {
+      const result = await importFile('mapeo-estados', file);
+      message.success(`${result.imported} mapeos importados correctamente`);
+      fetchData();
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Error al importar archivo');
+    }
+    setLoading(false);
+    return false; // Prevent default upload
   };
 
   const handleSave = async () => {
@@ -116,9 +129,16 @@ export default function MapeoEstadosPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={3} style={{ margin: 0 }}>🔧 Mapeo de Estados</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          Agregar Mapeo
-        </Button>
+        <Space>
+          <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={handleUpload}>
+            <Button icon={<UploadOutlined />} loading={loading}>
+              Importar Excel
+            </Button>
+          </Upload>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            Agregar Mapeo
+          </Button>
+        </Space>
       </div>
 
       <Table

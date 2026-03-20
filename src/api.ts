@@ -86,7 +86,7 @@ export const deleteCpa = (id: number) =>
 
 // ── Import ──
 export const importFile = (
-  endpoint: 'pedidos' | 'productos' | 'cartera' | 'cpa',
+  endpoint: 'pedidos' | 'productos' | 'cartera' | 'cpa' | 'mapeo-estados',
   file: File,
   onProgress?: (percent: number) => void,
 ) => {
