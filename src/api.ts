@@ -11,6 +11,7 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('petho_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    config.headers['x-auth-token'] = token; // Respaldo para Hostinger/Apache
   }
   return config;
 });
