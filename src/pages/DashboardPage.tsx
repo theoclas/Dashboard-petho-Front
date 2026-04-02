@@ -192,12 +192,22 @@ export default function DashboardPage() {
   const axisMuted = 'rgba(255,255,255,0.12)';
   const axisLabel = 'rgba(255,255,255,0.72)';
 
+  const isTotalVsDevoluciones = selectedMetric === 'total';
+
   const activeLineCard = cards.find((c) => c.dataKey === selectedMetric);
   const ordersLineColor = activeLineCard?.color ?? '#6366f1';
-  const ordersLineData = (stats.daily ?? []).map((row: Record<string, unknown>) => ({
-    ...row,
-    series: activeLineCard?.title ?? 'Serie',
-  }));
+  const ordersLineData: Record<string, unknown>[] = isTotalVsDevoluciones
+    ? (stats.daily ?? []).flatMap((row: Record<string, unknown>) => {
+        const date = String(row.date ?? '');
+        return [
+          { date, series: 'Total Pedidos', value: Number(row.total ?? 0) },
+          { date, series: 'Devoluciones', value: Number(row.devoluciones ?? 0) },
+        ];
+      })
+    : (stats.daily ?? []).map((row: Record<string, unknown>) => ({
+        ...row,
+        series: activeLineCard?.title ?? 'Serie',
+      }));
   const cpaLineData = (cpaStats?.dailyCpa ?? []).map((row: Record<string, unknown>) => ({
     ...row,
     series: 'CPA',
@@ -223,6 +233,7 @@ export default function DashboardPage() {
       labelFormatter: (d: number | string) => {
         const n = Number(d);
         if (Number.isNaN(n)) return String(d);
+        if (isTotalVsDevoluciones) return n.toLocaleString();
         return activeLineCard?.isMoney ? `$${n.toLocaleString()}` : n.toLocaleString();
       },
     },
@@ -256,6 +267,15 @@ export default function DashboardPage() {
   const lineLegend = {
     color: {
       position: 'top' as const,
+      layout: { justifyContent: 'center' as const },
+      itemLabelFill: 'rgba(255,255,255,0.88)',
+      itemMarkerSize: 10,
+    },
+  };
+
+  const lineLegendBottom = {
+    color: {
+      position: 'bottom' as const,
       layout: { justifyContent: 'center' as const },
       itemLabelFill: 'rgba(255,255,255,0.88)',
       itemMarkerSize: 10,
@@ -330,51 +350,80 @@ export default function DashboardPage() {
       {stats.daily && stats.daily.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <Card 
-            title={`Evolución Diaria: ${cards.find(c => c.dataKey === selectedMetric)?.title}`} 
+            title={
+              isTotalVsDevoluciones
+                ? 'Evolución Diaria: Total Pedidos vs Devoluciones'
+                : `Evolución Diaria: ${cards.find((c) => c.dataKey === selectedMetric)?.title}`
+            }
             style={{ background: '#141428', border: '1px solid rgba(255,255,255,0.06)' }}
             styles={{ header: { borderBottom: '1px solid rgba(255,255,255,0.06)' } }}
           >
             <Line
-              key={selectedMetric}
-              height={360}
+              key={isTotalVsDevoluciones ? 'evolucion-vs-devoluciones' : selectedMetric}
+              height={380}
               data={ordersLineData}
               xField="date"
-              yField={selectedMetric as string}
+              yField={isTotalVsDevoluciones ? 'value' : (selectedMetric as string)}
               colorField="series"
-              color={ordersLineColor}
-              scale={{ y: { nice: true } }}
+              {...(isTotalVsDevoluciones
+                ? {
+                    scale: {
+                      y: { nice: true },
+                      color: {
+                        domain: ['Total Pedidos', 'Devoluciones'],
+                        range: ['#1890ff', '#ff4d4f'],
+                      },
+                    },
+                  }
+                : {
+                    color: ordersLineColor,
+                    scale: { y: { nice: true } },
+                  })}
               axis={ordersLineAxis}
-              legend={lineLegend}
+              legend={isTotalVsDevoluciones ? lineLegendBottom : lineLegend}
               line={{
                 style: {
                   lineWidth: 2.5,
                 },
               }}
-              area={{
-                style: {
-                  fill: `l(270) 0:${ordersLineColor} 1:transparent`,
-                  fillOpacity: 0.22,
-                },
-              }}
+              {...(isTotalVsDevoluciones
+                ? {}
+                : {
+                    area: {
+                      style: {
+                        fill: `l(270) 0:${ordersLineColor} 1:transparent`,
+                        fillOpacity: 0.22,
+                      },
+                    },
+                  })}
               smooth
               point={{ size: 5, shape: 'circle', style: { lineWidth: 1, stroke: '#0d0d1a' } }}
-              tooltip={{
-                title: (d: { date?: string }) =>
-                  d?.date && dayjs(d.date, 'YYYY-MM-DD', true).isValid()
-                    ? dayjs(d.date).format('DD/MM/YYYY')
-                    : String(d?.date ?? ''),
-                items: [
-                  {
-                    channel: 'y',
-                    name: activeLineCard?.title ?? 'Valor',
-                    valueFormatter: (v: unknown) => {
-                      const n = Number(v);
-                      if (Number.isNaN(n)) return String(v ?? '');
-                      return activeLineCard?.isMoney ? `$${n.toLocaleString()}` : n.toLocaleString();
-                    },
-                  },
-                ],
-              }}
+              tooltip={
+                isTotalVsDevoluciones
+                  ? {
+                      title: (d: { date?: string }) =>
+                        d?.date && dayjs(d.date, 'YYYY-MM-DD', true).isValid()
+                          ? dayjs(d.date).format('DD/MM/YYYY')
+                          : String(d?.date ?? ''),
+                    }
+                  : {
+                      title: (d: { date?: string }) =>
+                        d?.date && dayjs(d.date, 'YYYY-MM-DD', true).isValid()
+                          ? dayjs(d.date).format('DD/MM/YYYY')
+                          : String(d?.date ?? ''),
+                      items: [
+                        {
+                          channel: 'y',
+                          name: activeLineCard?.title ?? 'Valor',
+                          valueFormatter: (v: unknown) => {
+                            const n = Number(v);
+                            if (Number.isNaN(n)) return String(v ?? '');
+                            return activeLineCard?.isMoney ? `$${n.toLocaleString()}` : n.toLocaleString();
+                          },
+                        },
+                      ],
+                    }
+              }
             />
           </Card>
         </div>
