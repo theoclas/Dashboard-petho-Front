@@ -23,11 +23,21 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 
 | Fase | Estado |
 |------|--------|
-| Fase 0 | Parcial — una página; paleta por transportadora aplicada al gráfico; tema oscuro alineado a cards del dashboard. |
+| Fase 0 | **Hecha** — página, paleta `TRANSPORTADORA_COLOR`, cards `#141428`. |
 | Fase 1 | **Hecha** — API + página + menú. |
 | Fase 2 | **Hecha** — tabla con colores, alineación, filtro por empresa, orden por columnas (cliente). |
 | Fase 3 | **Hecha** — comparativa con `Segmented` (depto/ciudad, efectividad/devolución) + `Column` agrupado. |
 | Fase 4 | **Hecha** — scroll horizontal gráfico + tabla; `main` / `region` / `aria-labelledby`; `Spin`, `autoFit`, `AbortController`. |
+
+---
+
+## 1.b Qué falta (resumen)
+
+| Pendiente | Notas |
+|-----------|--------|
+| **URL y menú** | `currentPage` sin `react-router` en varias pantallas; mejora: `navigate('/logistica')` alineado al menú (§4). |
+| **Roles** | Decidir si OPERADOR/LECTOR ven Logística igual que ahora (§2). |
+| **Gráfico en algunos entornos** | Si falla canvas/CDN, valorar alternativa SVG (Recharts) — solo si se reproduce. |
 
 ---
 
@@ -53,7 +63,7 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 
 ### Fase 1 — API client y página mínima
 
-- [x] [`api.ts`](../src/api.ts): `getEfectividadTransportadoras`, `getComparativaGeografica` (sin endpoint backend aún para comparativa).
+- [x] [`api.ts`](../src/api.ts): `getEfectividadTransportadoras`, `getComparativaGeografica` (backend en producción).
 - [x] [`LogisticaTransportadorasPage.tsx`](../src/pages/LogisticaTransportadorasPage.tsx): rango de fechas opcional + tabla + `Spin` / `Alert`.
 - [x] [`App.tsx`](../src/App.tsx): menú `logistica`, `TruckOutlined`, `case 'logistica'` en `renderPage` (ADMIN y OPERADOR).
 
@@ -106,3 +116,11 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 ## 5. Referencia cruzada
 
 - Backend: [Dashboard-Petho-back/docs/PLAN-FASES-LOGISTICA-TRANSPORTADORAS.md](../../Dashboard-Petho-back/docs/PLAN-FASES-LOGISTICA-TRANSPORTADORAS.md).
+
+---
+
+## 6. Changelog del documento
+
+| Fecha (aprox.) | Cambio |
+|----------------|--------|
+| 2026-04 | Fase 0 cerrada; “Qué falta”; nota api/comparativa al día; Fase 4 responsive/a11y. |

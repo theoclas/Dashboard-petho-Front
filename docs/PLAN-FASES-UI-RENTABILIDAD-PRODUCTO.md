@@ -24,11 +24,22 @@ Implementación en **Dashboard-petho-Front** de la tabla **Rentabilidad por Prod
 
 | Fase | Estado |
 |------|--------|
-| Fase 0 | Parcial — tipos en `api.ts`; `formatCOP` en página; rango de fechas opcional. |
+| Fase 0 | **Hecha** — tipos, `formatCOP`, rango de fechas opcional. |
 | Fase 1 | **Hecha** — `getRentabilidadPorProducto`, [`RentabilidadProductoPage.tsx`](../src/pages/RentabilidadProductoPage.tsx), menú `rentabilidad-producto` + `App.tsx`. |
 | Fase 2 | **Hecha** — búsqueda con debounce + orden server-side (`sortBy`/`order`). |
 | Fase 3 | **Hecha** — CTA a CPA, colores por métrica, cabeceras en mayúsculas. |
-| Fase 4 | **Hecha** — `AbortController` + flag `active`; mensajes `Empty` según búsqueda/rango; sin React Query. |
+| Fase 4 | **Hecha** — `AbortController`, `Empty`, etc. Opcional sin hacer: React Query. |
+
+---
+
+## 1.b Qué falta (resumen)
+
+| Pendiente | Notas |
+|-----------|--------|
+| **CTA a CPA según rol** | Supuesto §2: ocultar o mensaje alternativo si el usuario no debe gestionar pauta (revisar `AuthContext`). |
+| **Tooltip** en pauta / desfase CPA–producto | Mejora UX documentada en §4. |
+| **React Query** | Opcional Fase 4 — cache y menos requests; no bloqueante. |
+| **Tests E2E front** | No hay suite en front; el contrato se valida en back (`test:e2e` + live opcional). |
 
 ---
 
@@ -54,7 +65,7 @@ Implementación en **Dashboard-petho-Front** de la tabla **Rentabilidad por Prod
 
 ### Fase 1 — API y página mínima
 
-- [x] `getRentabilidadPorProducto` en [`api.ts`](../src/api.ts) (la página aún no envía `search` / `sortBy` dinámico; Fase 2).
+- [x] `getRentabilidadPorProducto` en [`api.ts`](../src/api.ts); búsqueda y orden dinámicos en Fase 2.
 - [x] [`RentabilidadProductoPage.tsx`](../src/pages/RentabilidadProductoPage.tsx): tabla + paginación server-side; orden fijo `utilidad` desc.
 - [x] Menú **Rentabilidad producto** (`AppstoreOutlined`), clave `rentabilidad-producto`, en [`App.tsx`](../src/App.tsx) (ADMIN y OPERADOR).
 
@@ -105,3 +116,11 @@ Implementación en **Dashboard-petho-Front** de la tabla **Rentabilidad por Prod
 
 - Backend: [Dashboard-Petho-back/docs/PLAN-FASES-RENTABILIDAD-POR-PRODUCTO.md](../../Dashboard-Petho-back/docs/PLAN-FASES-RENTABILIDAD-POR-PRODUCTO.md).
 - UI logística (misma convención de menú/API): [PLAN-FASES-UI-LOGISTICA.md](./PLAN-FASES-UI-LOGISTICA.md).
+
+---
+
+## 6. Changelog del documento
+
+| Fecha (aprox.) | Cambio |
+|----------------|--------|
+| 2026-04 | Fase 0 cerrada en tabla; “Qué falta”; corrección texto Fase 1 (search/sort). |
