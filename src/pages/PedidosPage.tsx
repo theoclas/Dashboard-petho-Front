@@ -97,8 +97,11 @@ export default function PedidosPage() {
     if (filters.transportadora) params.transportadora = filters.transportadora;
     if (filters.ciudad) params.ciudad = filters.ciudad;
     if (filters.id_dropi) params.id_dropi = filters.id_dropi;
-    if (filters.startDate) params.startDate = filters.startDate;
-    if (filters.endDate) params.endDate = filters.endDate;
+    // Ambas o ninguna: si solo llega una al API, el backend no aplica rango y exporta “todo”.
+    if (filters.startDate && filters.endDate) {
+      params.startDate = filters.startDate;
+      params.endDate = filters.endDate;
+    }
     return params;
   }, [filters, sortField, sortOrder]);
 
@@ -121,13 +124,21 @@ export default function PedidosPage() {
     try {
       const res = await exportPedidosExcel(buildListParams());
       const blob = res.data;
+      if (blob.type && blob.type.includes('application/json')) {
+        message.error('Error al exportar (respuesta inválida). Revisa sesión o despliegue del API.');
+        return;
+      }
       const truncated =
         String(res.headers['x-export-truncated'] ?? '').toLowerCase() === 'true';
       const totalMatching = res.headers['x-export-total-matching'];
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `pedidos_${dayjs().format('YYYY-MM-DD_HHmm')}.xlsx`;
+      const nameSuffix =
+        filters.startDate && filters.endDate
+          ? `${filters.startDate}_a_${filters.endDate}`
+          : dayjs().format('YYYY-MM-DD_HHmm');
+      a.download = `pedidos_${nameSuffix}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();

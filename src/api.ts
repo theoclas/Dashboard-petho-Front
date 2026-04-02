@@ -39,12 +39,12 @@ export function isRequestCanceled(e: unknown): boolean {
 export const getPedidos = (params?: Record<string, unknown>) =>
   api.get('/pedidos', { params }).then((r) => r.data);
 
-/** Descarga Excel con los mismos filtros que el listado (sin paginación). */
-export const exportPedidosExcel = (params?: Record<string, unknown>) =>
-  api.get<Blob>('/pedidos/export', {
-    params,
+/** Descarga Excel con los mismos filtros que el listado (sin paginación). POST evita pérdida de query en proxies/caché. */
+export const exportPedidosExcel = (body: Record<string, unknown>) =>
+  api.post<Blob>('/pedidos/export', body, {
     responseType: 'blob',
     timeout: 300000,
+    headers: { 'Content-Type': 'application/json' },
   });
 
 export const getPedidoByDropiId = (idDropi: string) =>
