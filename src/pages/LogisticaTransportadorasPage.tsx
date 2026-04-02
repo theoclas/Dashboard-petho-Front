@@ -13,7 +13,6 @@ import {
   Typography,
 } from 'antd';
 import { LineChartOutlined, TruckOutlined } from '@ant-design/icons';
-import { Column } from '@ant-design/charts';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import type { AxiosError } from 'axios';
@@ -56,6 +55,124 @@ function paletteForCarriers(names: string[]) {
   });
   const range = domain.map((n) => TRANSPORTADORA_COLOR[n] || '#64748b');
   return { domain, range };
+}
+
+function colorByCarrier(domain: string[], range: string[], carrier: string): string {
+  const i = domain.indexOf(carrier);
+  return i >= 0 ? range[i]! : '#64748b';
+}
+
+const CHART_INNER_H = 260;
+const Y_TICKS = [100, 75, 50, 25, 0];
+
+/** Barras agrupadas sin canvas (evita fallos de @ant-design/charts/G2 en Brave y contenedores flex). */
+function ComparativaGeograficaBars(props: {
+  ubicaciones: string[];
+  puntos: { ubicacion: string; transportadora: string; valorPct: number }[];
+  colorDomain: string[];
+  colorRange: string[];
+}) {
+  const { ubicaciones, puntos, colorDomain, colorRange } = props;
+  const byLoc = useMemo(() => {
+    const m = new Map<string, typeof puntos>();
+    for (const u of ubicaciones) m.set(u, []);
+    for (const p of puntos) {
+      const list = m.get(p.ubicacion);
+      if (list) list.push(p);
+    }
+    return m;
+  }, [ubicaciones, puntos]);
+
+  return (
+    <div style={{ display: 'flex', width: '100%', minHeight: CHART_INNER_H + 56, gap: 8 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          width: 36,
+          paddingBottom: 28,
+          fontSize: 11,
+          color: 'rgba(255,255,255,0.45)',
+          textAlign: 'right',
+        }}
+      >
+        {Y_TICKS.map((t) => (
+          <span key={t}>{t}%</span>
+        ))}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 6,
+          paddingBottom: 4,
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        {ubicaciones.map((u) => {
+          const series = byLoc.get(u) ?? [];
+          return (
+            <div
+              key={u}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                flex: '0 0 auto',
+                minWidth: 52,
+                maxWidth: 120,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'center',
+                  gap: 3,
+                  height: CHART_INNER_H,
+                }}
+              >
+                {series.map((p) => {
+                  const h = Math.max(2, (p.valorPct / 100) * CHART_INNER_H);
+                  const bg = colorByCarrier(colorDomain, colorRange, p.transportadora);
+                  return (
+                    <div
+                      key={`${u}-${p.transportadora}`}
+                      title={`${p.transportadora}: ${p.valorPct}%`}
+                      style={{
+                        width: Math.min(14, Math.max(8, 40 / Math.max(1, series.length))),
+                        height: h,
+                        background: bg,
+                        borderRadius: 3,
+                        cursor: 'default',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <Text
+                ellipsis={{ tooltip: u }}
+                style={{
+                  marginTop: 6,
+                  fontSize: 10,
+                  lineHeight: 1.2,
+                  maxWidth: '100%',
+                  textAlign: 'center',
+                  color: 'rgba(255,255,255,0.65)',
+                }}
+              >
+                {u}
+              </Text>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function errMsg(e: unknown): string {
@@ -135,69 +252,10 @@ export default function LogisticaTransportadorasPage() {
   const colorScale = useMemo(() => paletteForCarriers(carriers), [carriers]);
   const ubicaciones = comparativa?.ubicaciones ?? EMPTY_UBICACIONES;
 
-  /** Ancho mínimo del canvas para que en móvil se pueda hacer scroll horizontal sin aplastar las barras. */
-  const chartScrollMinWidth = useMemo(() => {
-    if (!ubicaciones.length) return 520;
-    return Math.max(520, Math.min(2200, ubicaciones.length * 76 + 200));
+  const comparativaMinWidth = useMemo(() => {
+    if (!ubicaciones.length) return 400;
+    return Math.max(400, Math.min(2400, 44 + ubicaciones.length * 58));
   }, [ubicaciones.length]);
-
-  /**
-   * La lib compara config con isEqual y hace chart.update() si cambia.
-   * Funciones nuevas en cada render (tooltip, formatters) provocan updates continuos y canvas en blanco (sobre todo en prod).
-   */
-  const comparativaColumnConfig = useMemo(
-    () => ({
-      containerStyle: { width: chartScrollMinWidth, height: 420 } as const,
-      data: chartData,
-      xField: 'ubicacion' as const,
-      yField: 'valorPct' as const,
-      colorField: 'transportadora' as const,
-      group: true,
-      height: 380,
-      autoFit: true,
-      scale: {
-        y: { domainMax: 100, nice: true },
-        x: ubicaciones.length ? { domain: ubicaciones } : undefined,
-        color:
-          colorScale.domain.length > 0
-            ? { domain: colorScale.domain, range: colorScale.range }
-            : undefined,
-      },
-      axis: {
-        y: {
-          labelFormatter: (v: string | number) => `${v}%`,
-          gridLineDash: [4, 4] as [number, number],
-          gridStroke: 'rgba(255,255,255,0.12)',
-          labelFill: 'rgba(255,255,255,0.65)',
-          titleFill: 'rgba(255,255,255,0.65)',
-        },
-        x: {
-          labelAutoRotate: true,
-          labelAutoHide: true,
-          labelFill: 'rgba(255,255,255,0.65)',
-          titleFill: 'rgba(255,255,255,0.65)',
-        },
-      },
-      legend: {
-        color: {
-          position: 'bottom' as const,
-          layout: { justifyContent: 'center' },
-          itemMarker: { symbol: 'circle' as const },
-          itemLabelFill: 'rgba(255,255,255,0.75)',
-        },
-      },
-      tooltip: {
-        title: (d: { ubicacion?: string }) => String(d.ubicacion),
-        items: [
-          (d: { transportadora?: string; valorPct?: number }) => ({
-            name: d.transportadora,
-            value: `${d.valorPct}%`,
-          }),
-        ],
-      },
-    }),
-    [chartData, ubicaciones, colorScale, chartScrollMinWidth],
-  );
 
   const columns: ColumnsType<EfectividadTransportadoraRow> = [
     {
@@ -385,11 +443,33 @@ export default function LogisticaTransportadorasPage() {
                 WebkitOverflowScrolling: 'touch',
               }}
             >
-              <div style={{ minHeight: 420, minWidth: chartScrollMinWidth }}>
-                <Column
-                  key={`${dimension}-${metrica}-${rangeKey}`}
-                  {...comparativaColumnConfig}
+              <div
+                key={`${dimension}-${metrica}-${rangeKey}`}
+                style={{ minWidth: comparativaMinWidth, paddingTop: 8 }}
+              >
+                <ComparativaGeograficaBars
+                  ubicaciones={ubicaciones}
+                  puntos={chartData}
+                  colorDomain={colorScale.domain}
+                  colorRange={colorScale.range}
                 />
+                <Flex wrap="wrap" gap="12px 20px" justify="center" style={{ marginTop: 20 }}>
+                  {colorScale.domain.map((name, i) => (
+                    <Space key={name} size={6} align="center">
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: colorScale.range[i],
+                          flexShrink: 0,
+                        }}
+                      />
+                      <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>{name}</Text>
+                    </Space>
+                  ))}
+                </Flex>
               </div>
             </div>
           )}
