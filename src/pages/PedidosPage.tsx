@@ -4,11 +4,11 @@ import {
   Tooltip, message, InputNumber, DatePicker,
 } from 'antd';
 import {
-  SearchOutlined, ReloadOutlined,
+  SearchOutlined, ReloadOutlined, DownloadOutlined,
   EditOutlined, SaveOutlined, CloseOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { getPedidos, updatePedido, getProductosDetalle, remapearEstados } from '../api';
+import { getPedidos, updatePedido, getProductosDetalle, remapearEstados, exportPedidosExcel } from '../api';
 import dayjs from 'dayjs';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -89,17 +89,23 @@ export default function PedidosPage() {
   const [editData, setEditData] = useState<Partial<Pedido>>({});
   const [expandedProducts, setExpandedProducts] = useState<Record<string, ProductoDetalle[]>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [exporting, setExporting] = useState(false);
+
+  const buildListParams = useCallback((): Record<string, unknown> => {
+    const params: Record<string, unknown> = { sortField, sortOrder };
+    if (filters.estado_unificado) params.estado_unificado = filters.estado_unificado;
+    if (filters.transportadora) params.transportadora = filters.transportadora;
+    if (filters.ciudad) params.ciudad = filters.ciudad;
+    if (filters.id_dropi) params.id_dropi = filters.id_dropi;
+    if (filters.startDate) params.startDate = filters.startDate;
+    if (filters.endDate) params.endDate = filters.endDate;
+    return params;
+  }, [filters, sortField, sortOrder]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, unknown> = { page, limit, sortField, sortOrder };
-      if (filters.estado_unificado) params.estado_unificado = filters.estado_unificado;
-      if (filters.transportadora) params.transportadora = filters.transportadora;
-      if (filters.ciudad) params.ciudad = filters.ciudad;
-      if (filters.id_dropi) params.id_dropi = filters.id_dropi;
-      if (filters.startDate) params.startDate = filters.startDate;
-      if (filters.endDate) params.endDate = filters.endDate;
+      const params: Record<string, unknown> = { page, limit, ...buildListParams() };
       const result = await getPedidos(params);
       setData(result.data);
       setTotal(result.total);
@@ -108,7 +114,37 @@ export default function PedidosPage() {
       message.error('Error cargando pedidos');
     }
     setLoading(false);
-  }, [page, limit, filters, sortField, sortOrder]);
+  }, [page, limit, buildListParams]);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await exportPedidosExcel(buildListParams());
+      const blob = res.data;
+      const truncated =
+        String(res.headers['x-export-truncated'] ?? '').toLowerCase() === 'true';
+      const totalMatching = res.headers['x-export-total-matching'];
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pedidos_${dayjs().format('YYYY-MM-DD_HHmm')}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      if (truncated && totalMatching != null) {
+        message.warning(
+          `Se exportaron las primeras 50.000 filas (${Number(totalMatching).toLocaleString()} coincidencias en total).`,
+        );
+      } else {
+        message.success('Excel descargado');
+      }
+    } catch {
+      message.error('Error al exportar a Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -487,6 +523,13 @@ export default function PedidosPage() {
               Sincronizar Estados
             </Button>
           )}
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExportExcel}
+            loading={exporting}
+          >
+            Exportar Excel
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={fetchData}>
             Recargar
           </Button>

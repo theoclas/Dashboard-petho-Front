@@ -39,6 +39,14 @@ export function isRequestCanceled(e: unknown): boolean {
 export const getPedidos = (params?: Record<string, unknown>) =>
   api.get('/pedidos', { params }).then((r) => r.data);
 
+/** Descarga Excel con los mismos filtros que el listado (sin paginación). */
+export const exportPedidosExcel = (params?: Record<string, unknown>) =>
+  api.get<Blob>('/pedidos/export', {
+    params,
+    responseType: 'blob',
+    timeout: 300000,
+  });
+
 export const getPedidoByDropiId = (idDropi: string) =>
   api.get(`/pedidos/dropi/${idDropi}`).then((r) => r.data);
 
