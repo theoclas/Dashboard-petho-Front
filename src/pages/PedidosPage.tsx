@@ -473,10 +473,13 @@ export default function PedidosPage() {
                 setLoading(true);
                 try {
                   const res = await remapearEstados();
-                  message.success(`Estados actualizados: ${res.remapeados} remapeados.`);
+                  message.success(
+                    `Sincronización lista: ${res.remapeados} pedidos actualizados` +
+                      (res.procesados != null ? ` (${res.procesados} evaluados).` : '.'),
+                  );
                   fetchData();
                 } catch {
-                  message.error('Error al automapear estados');
+                  message.error('Error al automapear estados (timeout o servidor). Reintente o revise logs del API.');
                   setLoading(false);
                 }
               }}

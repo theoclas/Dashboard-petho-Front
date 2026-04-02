@@ -208,7 +208,8 @@ export const importFile = (
   }).then((r) => r.data);
 };
 
+/** Remapeo masivo por lotes en servidor; puede tardar varios minutos con miles de pedidos. */
 export const remapearEstados = () =>
-  api.post('/import/remapear-estados').then((r) => r.data);
+  api.post('/import/remapear-estados', null, { timeout: 600000 }).then((r) => r.data);
 
 export default api;
