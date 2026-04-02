@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Typography, Spin, Space, DatePicker, Divider } from 'antd';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { Card, Row, Col, Statistic, Typography, Spin, Space, DatePicker, Divider, Tooltip } from 'antd';
 import { Pie, Column, Line } from '@ant-design/charts';
 import {
   ShoppingCartOutlined,
@@ -9,6 +9,9 @@ import {
   TruckOutlined,
   WarningOutlined,
   BarChartOutlined,
+  InboxOutlined,
+  QuestionCircleOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { getDashboardStats, getCpaStats } from '../api';
 import dayjs, { Dayjs } from 'dayjs';
@@ -25,6 +28,10 @@ interface Stats {
   totalGanancia: number;
   totalCartera: number;
   sinMapear: number;
+  /** Pedidos con número de guía no vacío (mismo rango de fechas). */
+  totalGuias?: number;
+  /** Suma de cantidades en productos_detalle de esos pedidos. */
+  productosVendidos?: number;
   daily?: any[];
 }
 
@@ -75,13 +82,42 @@ export default function DashboardPage() {
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!stats) return null;
 
-  const cards = [
+  type DashCard = {
+    title: string;
+    value: number;
+    dataKey: string;
+    icon: ReactNode;
+    color: string;
+    suffix?: string;
+    prefix?: string;
+    isMoney?: boolean;
+    isCpa?: boolean;
+    tooltip?: string;
+  };
+
+  const cards: DashCard[] = [
     {
       title: 'Total Pedidos',
       value: stats.total,
       dataKey: 'total',
       icon: <ShoppingCartOutlined />,
       color: '#1890ff',
+    },
+    {
+      title: 'Total guías',
+      value: stats.totalGuias ?? 0,
+      dataKey: 'totalGuias',
+      icon: <TruckOutlined />,
+      color: '#2f54eb',
+      tooltip: 'Pedidos con guía asignada (campo no vacío) en el rango de fechas.',
+    },
+    {
+      title: 'Productos vendidos',
+      value: stats.productosVendidos ?? 0,
+      dataKey: 'productosVendidos',
+      icon: <InboxOutlined />,
+      color: '#722ed1',
+      tooltip: 'Suma de unidades (cantidad) en el detalle de productos de esos pedidos.',
     },
     {
       title: 'Entregados',
@@ -103,7 +139,7 @@ export default function DashboardPage() {
       title: 'En Proceso',
       value: stats.enProceso,
       dataKey: 'enProceso',
-      icon: <TruckOutlined />,
+      icon: <ClockCircleOutlined />,
       color: '#faad14',
       suffix: `(${((stats.enProceso / (stats.total || 1)) * 100).toFixed(1)}%)`,
     },
@@ -191,7 +227,18 @@ export default function DashboardPage() {
               }}
             >
               <Statistic
-                title={card.title}
+                title={
+                  card.tooltip ? (
+                    <span>
+                      {card.title}{' '}
+                      <Tooltip title={card.tooltip}>
+                        <QuestionCircleOutlined style={{ opacity: 0.55, fontSize: 12, cursor: 'help' }} />
+                      </Tooltip>
+                    </span>
+                  ) : (
+                    card.title
+                  )
+                }
                 value={card.value}
                 prefix={card.icon}
                 suffix={card.suffix}
