@@ -86,7 +86,7 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 
 - [x] Estado `dimension` / `metrica` + `Segmented` en card “Comparativa”.
 - [x] Refetch al cambiar rango, dimensión o métrica (`getComparativaGeografica`).
-- [x] `Column` con `group`, `colorField`, escala Y 0–100 %, dominio X según `ubicaciones`.
+- [x] Comparativa: **barras agrupadas en DOM** (sin canvas G2): eje Y 0–100 %, una columna por `ubicacion`, leyenda por transportadora; se abandonó `Column` de `@ant-design/charts` por fallos en Brave/hosting.
 - [x] Leyenda inferior; `Empty` si no hay puntos.
 
 **Criterio de hecho:** alternar los cuatro combinaciones (2×2) sin romper el gráfico.
