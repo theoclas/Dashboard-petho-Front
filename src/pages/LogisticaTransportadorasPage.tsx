@@ -135,13 +135,19 @@ export default function LogisticaTransportadorasPage() {
   const colorScale = useMemo(() => paletteForCarriers(carriers), [carriers]);
   const ubicaciones = comparativa?.ubicaciones ?? EMPTY_UBICACIONES;
 
+  /** Ancho mínimo del canvas para que en móvil se pueda hacer scroll horizontal sin aplastar las barras. */
+  const chartScrollMinWidth = useMemo(() => {
+    if (!ubicaciones.length) return 520;
+    return Math.max(520, Math.min(2200, ubicaciones.length * 76 + 200));
+  }, [ubicaciones.length]);
+
   /**
    * La lib compara config con isEqual y hace chart.update() si cambia.
    * Funciones nuevas en cada render (tooltip, formatters) provocan updates continuos y canvas en blanco (sobre todo en prod).
    */
   const comparativaColumnConfig = useMemo(
     () => ({
-      containerStyle: { width: '100%', height: 420 } as const,
+      containerStyle: { width: chartScrollMinWidth, height: 420 } as const,
       data: chartData,
       xField: 'ubicacion' as const,
       yField: 'valorPct' as const,
@@ -190,7 +196,7 @@ export default function LogisticaTransportadorasPage() {
         ],
       },
     }),
-    [chartData, ubicaciones, colorScale],
+    [chartData, ubicaciones, colorScale, chartScrollMinWidth],
   );
 
   const columns: ColumnsType<EfectividadTransportadoraRow> = [
@@ -272,10 +278,11 @@ export default function LogisticaTransportadorasPage() {
   ];
 
   return (
+    <main aria-labelledby="logistica-page-title" style={{ width: '100%' }}>
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <div>
-        <Title level={4} style={{ margin: 0 }}>
-          <TruckOutlined style={{ marginRight: 8 }} />
+        <Title level={4} id="logistica-page-title" style={{ margin: 0 }}>
+          <TruckOutlined style={{ marginRight: 8 }} aria-hidden />
           Logística y transportadoras
         </Title>
         <Text type="secondary">Efectividad por empresa y comparativa geográfica (Top 15).</Text>
@@ -298,11 +305,13 @@ export default function LogisticaTransportadorasPage() {
       <Spin spinning={loading}>
         <Card
           style={cardSurface}
+          role="region"
+          aria-labelledby="logistica-efectividad-title"
           styles={{ header: { borderBottom: '1px solid rgba(255,255,255,0.06)' } }}
           title={
             <Space>
-              <TruckOutlined />
-              <span>Efectividad Transportadora</span>
+              <TruckOutlined aria-hidden />
+              <span id="logistica-efectividad-title">Efectividad Transportadora</span>
             </Space>
           }
           extra={
@@ -321,18 +330,21 @@ export default function LogisticaTransportadorasPage() {
             pagination={false}
             size="middle"
             showSorterTooltip
+            scroll={{ x: 'max-content' }}
             locale={{ emptyText: <Empty description="Sin datos" /> }}
           />
         </Card>
 
         <Card
           style={{ ...cardSurface, marginTop: 24 }}
+          role="region"
+          aria-labelledby="logistica-comparativa-title"
           styles={{ header: { borderBottom: '1px solid rgba(255,255,255,0.06)' } }}
           title={
             <Space direction="vertical" size={0}>
               <Space>
-                <LineChartOutlined />
-                <span>Comparativa de Transportadoras</span>
+                <LineChartOutlined aria-hidden />
+                <span id="logistica-comparativa-title">Comparativa de Transportadoras</span>
               </Space>
               <Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
                 Analiza el rendimiento geográfico (Top 15)
@@ -365,15 +377,25 @@ export default function LogisticaTransportadorasPage() {
           {chartData.length === 0 ? (
             <Empty description="Sin datos para el gráfico con los filtros actuales" />
           ) : (
-            <div style={{ width: '100%', minHeight: 420, minWidth: 0 }}>
-              <Column
-                key={`${dimension}-${metrica}-${rangeKey}`}
-                {...comparativaColumnConfig}
-              />
+            <div
+              style={{
+                width: '100%',
+                minWidth: 0,
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+              }}
+            >
+              <div style={{ minHeight: 420, minWidth: chartScrollMinWidth }}>
+                <Column
+                  key={`${dimension}-${metrica}-${rangeKey}`}
+                  {...comparativaColumnConfig}
+                />
+              </div>
             </div>
           )}
         </Card>
       </Spin>
     </Space>
+    </main>
   );
 }

@@ -27,7 +27,7 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 | Fase 1 | **Hecha** — API + página + menú. |
 | Fase 2 | **Hecha** — tabla con colores, alineación, filtro por empresa, orden por columnas (cliente). |
 | Fase 3 | **Hecha** — comparativa con `Segmented` (depto/ciudad, efectividad/devolución) + `Column` agrupado. |
-| Fase 4 | Parcial — `Spin`, gráfico `autoFit`, cancelación de requests (`AbortController`); accesibilidad avanzada pendiente. |
+| Fase 4 | **Hecha** — scroll horizontal gráfico + tabla; `main` / `region` / `aria-labelledby`; `Spin`, `autoFit`, `AbortController`. |
 
 ---
 
@@ -86,8 +86,8 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 ### Fase 4 — Pulido, responsive y accesibilidad
 
 - [x] `Spin` alrededor de la tabla (fase 1 mínima).
-- [ ] Comportamiento en móvil: scroll horizontal del gráfico o reducción de etiquetas eje X.
-- [ ] Etiquetas accesibles donde el chart lo permita; títulos semánticos.
+- [x] Móvil: contenedor con `overflow-x: auto`, ancho mínimo del chart según cantidad de ubicaciones; tabla con `scroll={{ x: 'max-content' }}`.
+- [x] `main` + `role="region"` + `aria-labelledby` en cards; iconos decorativos con `aria-hidden`.
 
 **Criterio de hecho:** uso aceptable en viewport estrecho; sin warnings graves de React.
 
