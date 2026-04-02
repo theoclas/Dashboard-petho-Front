@@ -212,4 +212,18 @@ export const importFile = (
 export const remapearEstados = () =>
   api.post('/import/remapear-estados', null, { timeout: 600000 }).then((r) => r.data);
 
+export type WipeImportedResponse = {
+  deleted: {
+    productos_detalle: number;
+    cartera_movimientos: number;
+    pedidos: number;
+  };
+};
+
+/** Solo ADMIN; requiere IMPORT_WIPE_SECRET en el servidor = misma contraseña. */
+export const wipeImportedTables = (password: string) =>
+  api
+    .post<WipeImportedResponse>('/import/wipe-imported-tables', { password }, { timeout: 120000 })
+    .then((r) => r.data);
+
 export default api;

@@ -1,7 +1,21 @@
 import { useState } from 'react';
-import { Upload, Button, Alert, Card, Typography, Row, Col } from 'antd';
-import { InboxOutlined, CheckCircleOutlined, LoadingOutlined } from '@ant-design/icons';
-import { importFile } from '../api';
+import {
+  Upload,
+  Button,
+  Alert,
+  Card,
+  Typography,
+  Row,
+  Col,
+  Input,
+  Space,
+  Modal,
+  message,
+} from 'antd';
+import { InboxOutlined, CheckCircleOutlined, LoadingOutlined, DeleteOutlined } from '@ant-design/icons';
+import { importFile, wipeImportedTables } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+import type { AxiosError } from 'axios';
 
 const { Dragger } = Upload;
 const { Title, Text } = Typography;
@@ -32,7 +46,19 @@ const IMPORT_STEPS = [
   },
 ];
 
+function wipeErrMsg(e: unknown): string {
+  const ax = e as AxiosError<{ message?: string | string[] }>;
+  const m = ax.response?.data?.message;
+  if (m) return Array.isArray(m) ? m.join(', ') : m;
+  if (e instanceof Error) return e.message;
+  return 'Error desconocido';
+}
+
 export default function ImportWizard() {
+  const { user } = useAuth();
+  const [wipePassword, setWipePassword] = useState('');
+  const [wipeLoading, setWipeLoading] = useState(false);
+
   const [results, setResults] = useState<Record<string, StepResult | null>>({
     cartera: null,
     productos: null,
@@ -67,6 +93,58 @@ export default function ImportWizard() {
     }
 
     return false; // Prevent default upload behavior
+  };
+
+  const openWipeConfirm = () => {
+    const pwd = wipePassword.trim();
+    if (!pwd) {
+      message.warning('Escribe la contraseña de limpieza (IMPORT_WIPE_SECRET en el servidor).');
+      return;
+    }
+    Modal.confirm({
+      title: '¿Estás segurisimooo?',
+      width: 480,
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>
+            Vas a <strong>eliminar todas las filas</strong> de:
+          </p>
+          <ul style={{ marginBottom: 12 }}>
+            <li>
+              <strong>pedidos</strong>
+            </li>
+            <li>
+              <strong>productos_detalle</strong> (líneas de producto por pedido)
+            </li>
+            <li>
+              <strong>cartera_movimientos</strong>
+            </li>
+          </ul>
+          <Text type="secondary" style={{ fontSize: 13, display: 'block' }}>
+            No se borran: mapeo de estados, CPA, notas manuales ni usuarios. Esta acción no se puede
+            deshacer.
+          </Text>
+        </div>
+      ),
+      okText: 'Sí, borrar todo',
+      okType: 'danger',
+      cancelText: 'Mejor no',
+      onOk: async () => {
+        setWipeLoading(true);
+        try {
+          const res = await wipeImportedTables(pwd);
+          message.success(
+            `Eliminado: ${res.deleted.pedidos} pedidos, ${res.deleted.productos_detalle} líneas de producto, ${res.deleted.cartera_movimientos} movimientos de cartera.`,
+          );
+          setWipePassword('');
+        } catch (e: unknown) {
+          message.error(wipeErrMsg(e));
+          throw e;
+        } finally {
+          setWipeLoading(false);
+        }
+      },
+    });
   };
 
   return (
@@ -133,6 +211,46 @@ export default function ImportWizard() {
           );
         })}
       </Row>
+
+      {user?.role === 'ADMIN' && (
+        <Card
+          title="Zona peligrosa"
+          variant="borderless"
+          style={{
+            marginTop: 32,
+            border: '1px solid rgba(239, 68, 68, 0.45)',
+            background: 'rgba(239, 68, 68, 0.06)',
+          }}
+        >
+          <Text type="danger" strong style={{ display: 'block', marginBottom: 12 }}>
+            Limpiar tablas importadas
+          </Text>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+            Borra solo datos de Excel/Dropi: pedidos, detalle de productos y cartera. El servidor debe
+            tener definida la variable <code>IMPORT_WIPE_SECRET</code>; aquí debes escribir{' '}
+            <strong>exactamente</strong> esa misma contraseña.
+          </Text>
+          <Space wrap align="start" style={{ width: '100%' }}>
+            <Input.Password
+              placeholder="Contraseña obligatoria"
+              value={wipePassword}
+              onChange={(e) => setWipePassword(e.target.value)}
+              style={{ maxWidth: 320 }}
+              autoComplete="new-password"
+            />
+            <Button
+              danger
+              type="primary"
+              icon={<DeleteOutlined />}
+              loading={wipeLoading}
+              disabled={!wipePassword.trim()}
+              onClick={openWipeConfirm}
+            >
+              Borrar datos importados
+            </Button>
+          </Space>
+        </Card>
+      )}
 
       <div style={{ marginTop: '50px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
         <Text type="secondary" style={{ fontSize: '12px' }}>
