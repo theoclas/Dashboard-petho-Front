@@ -305,6 +305,8 @@ export default function LogisticaTransportadorasPage() {
             <Empty description="Sin datos para el gráfico con los filtros actuales" />
           ) : (
             <Column
+              key={`${dimension}-${metrica}-${rangeKey}`}
+              containerStyle={{ width: '100%', height: 420 }}
               data={chartData}
               xField="ubicacion"
               yField="valorPct"
@@ -325,10 +327,14 @@ export default function LogisticaTransportadorasPage() {
                   labelFormatter: (v: string | number) => `${v}%`,
                   gridLineDash: [4, 4],
                   gridStroke: 'rgba(255,255,255,0.12)',
+                  labelFill: 'rgba(255,255,255,0.65)',
+                  titleFill: 'rgba(255,255,255,0.65)',
                 },
                 x: {
                   labelAutoRotate: true,
                   labelAutoHide: true,
+                  labelFill: 'rgba(255,255,255,0.65)',
+                  titleFill: 'rgba(255,255,255,0.65)',
                 },
               }}
               legend={{
@@ -336,6 +342,7 @@ export default function LogisticaTransportadorasPage() {
                   position: 'bottom',
                   layout: { justifyContent: 'center' },
                   itemMarker: { symbol: 'circle' },
+                  itemLabelFill: 'rgba(255,255,255,0.75)',
                 },
               }}
               tooltip={{
