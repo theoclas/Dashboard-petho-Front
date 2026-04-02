@@ -207,8 +207,8 @@ export default function LogisticaTransportadorasPage() {
     setError(null);
     void (async () => {
       try {
-        const desde = range?.[0]?.startOf('day').toISOString();
-        const hasta = range?.[1]?.endOf('day').toISOString();
+        const desde = range?.[0]?.format('YYYY-MM-DD');
+        const hasta = range?.[1]?.format('YYYY-MM-DD');
         const dateOpts = desde && hasta ? { desde, hasta } : undefined;
         const [ef, cg] = await Promise.all([
           getEfectividadTransportadoras(dateOpts, { signal: ac.signal }),

@@ -52,8 +52,8 @@ export default function DashboardPage() {
     try {
       const params: { startDate?: string; endDate?: string } = {};
       if (dateRange && dateRange[0] && dateRange[1]) {
-        params.startDate = dateRange[0].startOf('day').toISOString();
-        params.endDate = dateRange[1].endOf('day').toISOString();
+        params.startDate = dateRange[0].format('YYYY-MM-DD');
+        params.endDate = dateRange[1].format('YYYY-MM-DD');
       }
       
       const [calc, cpaCalc] = await Promise.all([
