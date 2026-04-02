@@ -28,6 +28,13 @@ api.interceptors.response.use(
   }
 );
 
+/** Petición cancelada con AbortController / axios (no mostrar error al usuario). */
+export function isRequestCanceled(e: unknown): boolean {
+  if (axios.isCancel(e)) return true;
+  const err = e as { code?: string; name?: string };
+  return err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError';
+}
+
 // ── Pedidos ──
 export const getPedidos = (params?: Record<string, unknown>) =>
   api.get('/pedidos', { params }).then((r) => r.data);
@@ -83,6 +90,104 @@ export const updateCpa = (id: number, data: Record<string, unknown>) =>
 
 export const deleteCpa = (id: number) =>
   api.delete(`/cpa/${id}`).then((r) => r.data);
+
+// ── Reportes logística / rentabilidad (fase 1) ──
+export type EfectividadTransportadoraRow = {
+  empresa: string;
+  enviados: number;
+  transito: number;
+  pctTransito: number;
+  devoluciones: number;
+  pctDevoluciones: number;
+  cancelados: number;
+  rechazados: number;
+  entregados: number;
+  pctEntregados: number;
+};
+
+export const getEfectividadTransportadoras = (
+  params?: {
+    desde?: string;
+    hasta?: string;
+    transportadora?: string;
+  },
+  opts?: { signal?: AbortSignal },
+) =>
+  api
+    .get<EfectividadTransportadoraRow[]>('/reportes-logistica/efectividad-transportadoras', {
+      params,
+      signal: opts?.signal,
+    })
+    .then((r) => r.data);
+
+export type ComparativaGeograficaPunto = {
+  ubicacion: string;
+  transportadora: string;
+  valorPct: number;
+};
+
+export type ComparativaGeograficaResponse = {
+  dimension: 'departamento' | 'ciudad';
+  metrica: 'efectividad' | 'devolucion';
+  ubicaciones: string[];
+  puntos: ComparativaGeograficaPunto[];
+};
+
+export const getComparativaGeografica = (
+  params?: {
+    dimension?: 'departamento' | 'ciudad';
+    metrica?: 'efectividad' | 'devolucion';
+    top?: number;
+    desde?: string;
+    hasta?: string;
+  },
+  opts?: { signal?: AbortSignal },
+) =>
+  api
+    .get<ComparativaGeograficaResponse>('/reportes-logistica/comparativa-geografica', {
+      params,
+      signal: opts?.signal,
+    })
+    .then((r) => r.data);
+
+export type RentabilidadProductoRow = {
+  producto: string;
+  entr: number;
+  pctEfectividad: number;
+  tran: number;
+  pctTransito: number;
+  dev: number;
+  pctDevolucion: number;
+  ventas: number;
+  pauta: number;
+  utilidad: number;
+};
+
+export type RentabilidadPorProductoResponse = {
+  data: RentabilidadProductoRow[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export const getRentabilidadPorProducto = (
+  params?: {
+    desde?: string;
+    hasta?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    order?: 'asc' | 'desc';
+    search?: string;
+  },
+  opts?: { signal?: AbortSignal },
+) =>
+  api
+    .get<RentabilidadPorProductoResponse>('/reportes-rentabilidad/por-producto', {
+      params,
+      signal: opts?.signal,
+    })
+    .then((r) => r.data);
 
 // ── Import ──
 export const importFile = (

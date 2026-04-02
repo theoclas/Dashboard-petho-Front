@@ -8,6 +8,8 @@ import {
   LogoutOutlined,
   TeamOutlined,
   BarChartOutlined,
+  TruckOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
@@ -16,9 +18,12 @@ import ImportWizard from './pages/ImportWizard';
 import MapeoEstadosPage from './pages/MapeoEstadosPage';
 import UsersPage from './pages/UsersPage';
 import CpaPage from './pages/CpaPage';
+import LogisticaTransportadorasPage from './pages/LogisticaTransportadorasPage';
+import RentabilidadProductoPage from './pages/RentabilidadProductoPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { DashboardNavProvider } from './contexts/DashboardNavContext';
 import esES from 'antd/locale/es_ES';
 import LogoSinNombre from './assets/Logosinnombre.png';
 import LogoSinFondoCortada from './assets/Logo sin fondo cortada.png';
@@ -62,6 +67,12 @@ function MainLayout() {
     if (user?.role === 'ADMIN' || user?.role === 'OPERADOR') {
       items.push({ key: 'import', icon: <ImportOutlined />, label: 'Importar' });
       items.push({ key: 'cpa', icon: <BarChartOutlined />, label: 'CPA' });
+      items.push({ key: 'logistica', icon: <TruckOutlined />, label: 'Logística' });
+      items.push({
+        key: 'rentabilidad-producto',
+        icon: <AppstoreOutlined />,
+        label: 'Rentabilidad producto',
+      });
     }
 
     if (user?.role === 'ADMIN') {
@@ -86,6 +97,10 @@ function MainLayout() {
         return <UsersPage />;
       case 'cpa':
         return <CpaPage />;
+      case 'logistica':
+        return <LogisticaTransportadorasPage />;
+      case 'rentabilidad-producto':
+        return <RentabilidadProductoPage />;
       default:
         return (user?.role === 'OPERADOR' || user?.role === 'LECTOR') ? <PedidosPage /> : <DashboardPage />;
     }
@@ -169,7 +184,7 @@ function MainLayout() {
               overflow: 'auto',
             }}
           >
-            {renderPage()}
+            <DashboardNavProvider setPage={setCurrentPage}>{renderPage()}</DashboardNavProvider>
           </Content>
         </Layout>
       </Layout>
