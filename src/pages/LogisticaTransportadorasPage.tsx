@@ -41,6 +41,9 @@ const cardSurface = {
   border: '1px solid rgba(255,255,255,0.06)',
 } as const;
 
+/** Referencia estable para no romper memoización ni disparar updates infinitos en @ant-design/plots. */
+const EMPTY_UBICACIONES: string[] = [];
+
 function paletteForCarriers(names: string[]) {
   const order = ['COORDINADORA', 'ENVIA', 'INTERRAPIDISIMO', 'TCC'];
   const domain = [...new Set(names)].sort((a, b) => {
@@ -129,8 +132,66 @@ export default function LogisticaTransportadorasPage() {
     () => [...new Set(chartData.map((p) => p.transportadora))],
     [chartData],
   );
-  const { domain: colorDomain, range: colorRange } = paletteForCarriers(carriers);
-  const ubicaciones = comparativa?.ubicaciones ?? [];
+  const colorScale = useMemo(() => paletteForCarriers(carriers), [carriers]);
+  const ubicaciones = comparativa?.ubicaciones ?? EMPTY_UBICACIONES;
+
+  /**
+   * La lib compara config con isEqual y hace chart.update() si cambia.
+   * Funciones nuevas en cada render (tooltip, formatters) provocan updates continuos y canvas en blanco (sobre todo en prod).
+   */
+  const comparativaColumnConfig = useMemo(
+    () => ({
+      containerStyle: { width: '100%', height: 420 } as const,
+      data: chartData,
+      xField: 'ubicacion' as const,
+      yField: 'valorPct' as const,
+      colorField: 'transportadora' as const,
+      group: true,
+      height: 380,
+      autoFit: true,
+      scale: {
+        y: { domainMax: 100, nice: true },
+        x: ubicaciones.length ? { domain: ubicaciones } : undefined,
+        color:
+          colorScale.domain.length > 0
+            ? { domain: colorScale.domain, range: colorScale.range }
+            : undefined,
+      },
+      axis: {
+        y: {
+          labelFormatter: (v: string | number) => `${v}%`,
+          gridLineDash: [4, 4] as [number, number],
+          gridStroke: 'rgba(255,255,255,0.12)',
+          labelFill: 'rgba(255,255,255,0.65)',
+          titleFill: 'rgba(255,255,255,0.65)',
+        },
+        x: {
+          labelAutoRotate: true,
+          labelAutoHide: true,
+          labelFill: 'rgba(255,255,255,0.65)',
+          titleFill: 'rgba(255,255,255,0.65)',
+        },
+      },
+      legend: {
+        color: {
+          position: 'bottom' as const,
+          layout: { justifyContent: 'center' },
+          itemMarker: { symbol: 'circle' as const },
+          itemLabelFill: 'rgba(255,255,255,0.75)',
+        },
+      },
+      tooltip: {
+        title: (d: { ubicacion?: string }) => String(d.ubicacion),
+        items: [
+          (d: { transportadora?: string; valorPct?: number }) => ({
+            name: d.transportadora,
+            value: `${d.valorPct}%`,
+          }),
+        ],
+      },
+    }),
+    [chartData, ubicaciones, colorScale],
+  );
 
   const columns: ColumnsType<EfectividadTransportadoraRow> = [
     {
@@ -304,57 +365,12 @@ export default function LogisticaTransportadorasPage() {
           {chartData.length === 0 ? (
             <Empty description="Sin datos para el gráfico con los filtros actuales" />
           ) : (
-            <Column
-              key={`${dimension}-${metrica}-${rangeKey}`}
-              containerStyle={{ width: '100%', height: 420 }}
-              data={chartData}
-              xField="ubicacion"
-              yField="valorPct"
-              colorField="transportadora"
-              group
-              height={380}
-              autoFit
-              scale={{
-                y: { domainMax: 100, nice: true },
-                x: ubicaciones.length ? { domain: ubicaciones } : undefined,
-                color:
-                  colorDomain.length > 0
-                    ? { domain: colorDomain, range: colorRange }
-                    : undefined,
-              }}
-              axis={{
-                y: {
-                  labelFormatter: (v: string | number) => `${v}%`,
-                  gridLineDash: [4, 4],
-                  gridStroke: 'rgba(255,255,255,0.12)',
-                  labelFill: 'rgba(255,255,255,0.65)',
-                  titleFill: 'rgba(255,255,255,0.65)',
-                },
-                x: {
-                  labelAutoRotate: true,
-                  labelAutoHide: true,
-                  labelFill: 'rgba(255,255,255,0.65)',
-                  titleFill: 'rgba(255,255,255,0.65)',
-                },
-              }}
-              legend={{
-                color: {
-                  position: 'bottom',
-                  layout: { justifyContent: 'center' },
-                  itemMarker: { symbol: 'circle' },
-                  itemLabelFill: 'rgba(255,255,255,0.75)',
-                },
-              }}
-              tooltip={{
-                title: (d) => String(d.ubicacion),
-                items: [
-                  (d) => ({
-                    name: d.transportadora,
-                    value: `${d.valorPct}%`,
-                  }),
-                ],
-              }}
-            />
+            <div style={{ width: '100%', minHeight: 420, minWidth: 0 }}>
+              <Column
+                key={`${dimension}-${metrica}-${rangeKey}`}
+                {...comparativaColumnConfig}
+              />
+            </div>
           )}
         </Card>
       </Spin>
