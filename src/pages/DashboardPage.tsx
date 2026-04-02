@@ -189,6 +189,79 @@ export default function DashboardPage() {
     },
   ];
 
+  const axisMuted = 'rgba(255,255,255,0.12)';
+  const axisLabel = 'rgba(255,255,255,0.72)';
+
+  const activeLineCard = cards.find((c) => c.dataKey === selectedMetric);
+  const ordersLineColor = activeLineCard?.color ?? '#6366f1';
+  const ordersLineData = (stats.daily ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    series: activeLineCard?.title ?? 'Serie',
+  }));
+  const cpaLineData = (cpaStats?.dailyCpa ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    series: 'CPA',
+  }));
+
+  const ordersLineAxis = {
+    x: {
+      title: false,
+      labelFill: axisLabel,
+      lineStroke: axisMuted,
+      tickStroke: axisMuted,
+      labelFormatter: (d: string) =>
+        dayjs(d, 'YYYY-MM-DD', true).isValid() ? dayjs(d).format('DD/MM') : String(d),
+    },
+    y: {
+      title: false,
+      labelFill: axisLabel,
+      lineStroke: axisMuted,
+      tickStroke: axisMuted,
+      grid: true,
+      gridStroke: 'rgba(255,255,255,0.08)',
+      gridLineDash: [4, 4],
+      labelFormatter: (d: number | string) => {
+        const n = Number(d);
+        if (Number.isNaN(n)) return String(d);
+        return activeLineCard?.isMoney ? `$${n.toLocaleString()}` : n.toLocaleString();
+      },
+    },
+  };
+
+  const cpaLineAxis = {
+    x: {
+      title: false,
+      labelFill: axisLabel,
+      lineStroke: axisMuted,
+      tickStroke: axisMuted,
+      labelFormatter: (d: string) =>
+        dayjs(d, 'YYYY-MM-DD', true).isValid() ? dayjs(d).format('DD/MM') : String(d),
+    },
+    y: {
+      title: false,
+      labelFill: axisLabel,
+      lineStroke: axisMuted,
+      tickStroke: axisMuted,
+      grid: true,
+      gridStroke: 'rgba(255,255,255,0.08)',
+      gridLineDash: [4, 4],
+      labelFormatter: (d: number | string) => {
+        const n = Number(d);
+        if (Number.isNaN(n)) return String(d);
+        return `$${n.toLocaleString()}`;
+      },
+    },
+  };
+
+  const lineLegend = {
+    color: {
+      position: 'top' as const,
+      layout: { justifyContent: 'center' as const },
+      itemLabelFill: 'rgba(255,255,255,0.88)',
+      itemMarkerSize: 10,
+    },
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -262,27 +335,45 @@ export default function DashboardPage() {
             styles={{ header: { borderBottom: '1px solid rgba(255,255,255,0.06)' } }}
           >
             <Line
-              data={stats.daily}
+              key={selectedMetric}
+              height={360}
+              data={ordersLineData}
               xField="date"
               yField={selectedMetric as string}
-              color={cards.find(c => c.dataKey === selectedMetric)?.color || '#6366f1'}
+              colorField="series"
+              color={ordersLineColor}
+              scale={{ y: { nice: true } }}
+              axis={ordersLineAxis}
+              legend={lineLegend}
+              line={{
+                style: {
+                  lineWidth: 2.5,
+                },
+              }}
               area={{
-                 style: {
-                   fill: 'l(270) 0:#ffffff 1:transparent',
-                   fillOpacity: selectedMetric ? 0.2 : 0, 
-                 }
+                style: {
+                  fill: `l(270) 0:${ordersLineColor} 1:transparent`,
+                  fillOpacity: 0.22,
+                },
               }}
               smooth
-              point={{ size: 4, shape: 'circle' }}
+              point={{ size: 5, shape: 'circle', style: { lineWidth: 1, stroke: '#0d0d1a' } }}
               tooltip={{
-                formatter: (datum: any) => {
-                  const activeCard = cards.find(c => c.dataKey === selectedMetric);
-                  const val = datum[selectedMetric];
-                  return {
-                    name: activeCard?.title || 'Valor',
-                    value: activeCard?.isMoney ? `$${Number(val).toLocaleString()}` : val
-                  };
-                }
+                title: (d: { date?: string }) =>
+                  d?.date && dayjs(d.date, 'YYYY-MM-DD', true).isValid()
+                    ? dayjs(d.date).format('DD/MM/YYYY')
+                    : String(d?.date ?? ''),
+                items: [
+                  {
+                    channel: 'y',
+                    name: activeLineCard?.title ?? 'Valor',
+                    valueFormatter: (v: unknown) => {
+                      const n = Number(v);
+                      if (Number.isNaN(n)) return String(v ?? '');
+                      return activeLineCard?.isMoney ? `$${n.toLocaleString()}` : n.toLocaleString();
+                    },
+                  },
+                ],
               }}
             />
           </Card>
@@ -297,25 +388,44 @@ export default function DashboardPage() {
             styles={{ header: { borderBottom: '1px solid rgba(255,255,255,0.06)' } }}
           >
             <Line
-              data={cpaStats.dailyCpa}
+              height={360}
+              data={cpaLineData}
               xField="date"
               yField="cpa"
+              colorField="series"
               color="#eb2f96"
+              scale={{ y: { nice: true } }}
+              axis={cpaLineAxis}
+              legend={lineLegend}
+              line={{
+                style: {
+                  lineWidth: 2.5,
+                },
+              }}
               area={{
-                 style: {
-                   fill: 'l(270) 0:#ffffff 1:transparent',
-                   fillOpacity: 0.2, 
-                 }
+                style: {
+                  fill: 'l(270) 0:#eb2f96 1:transparent',
+                  fillOpacity: 0.22,
+                },
               }}
               smooth
-              point={{ size: 4, shape: 'circle' }}
+              point={{ size: 5, shape: 'circle', style: { lineWidth: 1, stroke: '#0d0d1a' } }}
               tooltip={{
-                formatter: (datum: any) => {
-                  return {
+                title: (d: { date?: string }) =>
+                  d?.date && dayjs(d.date, 'YYYY-MM-DD', true).isValid()
+                    ? dayjs(d.date).format('DD/MM/YYYY')
+                    : String(d?.date ?? ''),
+                items: [
+                  {
+                    channel: 'y',
                     name: 'CPA',
-                    value: `$${Number(datum.cpa).toLocaleString()}`
-                  };
-                }
+                    valueFormatter: (v: unknown) => {
+                      const n = Number(v);
+                      if (Number.isNaN(n)) return String(v ?? '');
+                      return `$${n.toLocaleString()}`;
+                    },
+                  },
+                ],
               }}
             />
           </Card>
