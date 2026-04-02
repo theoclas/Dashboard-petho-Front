@@ -5,7 +5,7 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 **Stack relevante**
 
 - React 19, Vite, TypeScript, Ant Design 6, `@ant-design/icons`.
-- Gráficos: `@ant-design/charts` (mismo patrón que [`src/pages/DashboardPage.tsx`](../src/pages/DashboardPage.tsx): `Column`, `Line`, `Pie`).
+- Gráficos: comparativa en **HTML/CSS** en esta página; en el resto del proyecto sigue [`DashboardPage.tsx`](../src/pages/DashboardPage.tsx) con `@ant-design/charts` (`Pie`, `Column`, `Line`).
 - Navegación interna: [`src/App.tsx`](../src/App.tsx) (`currentPage`, `menuItems`, `renderPage`); HTTP: [`src/api.ts`](../src/api.ts).
 
 ---
@@ -37,7 +37,7 @@ Implementación en **Dashboard-petho-Front** de las vistas inspiradas en las ref
 |-----------|--------|
 | **URL y menú** | `currentPage` sin `react-router` en varias pantallas; mejora: `navigate('/logistica')` alineado al menú (§4). |
 | **Roles** | Decidir si OPERADOR/LECTOR ven Logística igual que ahora (§2). |
-| **Gráfico en algunos entornos** | Si falla canvas/CDN, valorar alternativa SVG (Recharts) — solo si se reproduce. |
+| **Comparativa** | Implementada con barras DOM (sin canvas); riesgo G2/Brave cubierto en esta pantalla. |
 
 ---
 
