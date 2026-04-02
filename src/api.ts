@@ -87,6 +87,9 @@ export const getUniqueProductNames = () =>
 export const getCpas = (params?: Record<string, unknown>) =>
   api.get('/cpa', { params }).then((r) => r.data);
 
+export const getCpaDistinctProductos = () =>
+  api.get<string[]>('/cpa/distinct-productos').then((r) => r.data);
+
 export const getCpaStats = (params?: { startDate?: string; endDate?: string }) =>
   api.get('/cpa/stats', { params }).then((r) => r.data);
 
