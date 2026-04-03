@@ -43,6 +43,48 @@ import dayjs, { Dayjs } from 'dayjs';
 const { Title, Paragraph, Text } = Typography;
 const { RangePicker } = DatePicker;
 
+/** Celda sin dato en BD (null/undefined); distinto de 0, que es un valor real. */
+const CPA_EMPTY = '—';
+
+function isCpaValueAbsent(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === 'string' && v.trim() === '') return true;
+  return false;
+}
+
+/** True si la fila tiene algún número distinto de 0 en métricas CPA (un 0 suelto puede ser dato real). */
+function hasAnyNumericCpaActivity(r: CpaRecord): boolean {
+  const pos = (x: unknown) => x != null && !Number.isNaN(Number(x)) && Number(x) !== 0;
+  return (
+    pos(r.gasto_publicidad) ||
+    pos(r.ventas) ||
+    pos(r.utilidad_aproximada) ||
+    pos(r.cpa) ||
+    pos(r.conversaciones) ||
+    pos(r.ganancia_promedio)
+  );
+}
+
+/**
+ * Importes viejos guardaron celdas vacías como 0: si toda la fila es “todo cero” y sin actividad, se muestra como sin dato.
+ * Si hay actividad en otro campo, un 0 en esta columna es un cero real.
+ */
+function fmtCpaMoneyCell(v: unknown, r: CpaRecord): string {
+  if (isCpaValueAbsent(v)) return CPA_EMPTY;
+  const n = Number(v);
+  if (Number.isNaN(n)) return CPA_EMPTY;
+  if (n === 0 && !hasAnyNumericCpaActivity(r)) return CPA_EMPTY;
+  return n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+}
+
+function fmtCpaIntCell(v: unknown, r: CpaRecord): string {
+  if (isCpaValueAbsent(v)) return CPA_EMPTY;
+  const n = Number(v);
+  if (Number.isNaN(n)) return CPA_EMPTY;
+  if (n === 0 && !hasAnyNumericCpaActivity(r)) return CPA_EMPTY;
+  return n.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+}
+
 function wipeErrMsg(e: unknown): string {
   const ax = e as AxiosError<{ message?: string | string[] }>;
   const m = ax.response?.data?.message;
@@ -57,17 +99,17 @@ interface CpaRecord {
   fecha: string;
   producto: string;
   cuenta_publicitaria: string;
-  gasto_publicidad: number;
-  conversaciones: number;
-  total_facturado: number;
-  ganancia_promedio: number;
-  ventas: number;
-  ticket_promedio_producto: number;
-  cpa: number;
-  conversion_rate: number;
-  costo_publicitario: number;
-  rentabilidad: number;
-  utilidad_aproximada: number;
+  gasto_publicidad: number | null;
+  conversaciones: number | null;
+  total_facturado: number | null;
+  ganancia_promedio: number | null;
+  ventas: number | null;
+  ticket_promedio_producto: number | null;
+  cpa: number | null;
+  conversion_rate: number | null;
+  costo_publicitario: number | null;
+  rentabilidad: number | null;
+  utilidad_aproximada: number | null;
 }
 
 export default function CpaPage() {
@@ -274,7 +316,8 @@ export default function CpaPage() {
       width: 120,
       sorter: true,
       sortOrder: sortOrderFor('gasto_publicidad'),
-      render: (v: number) => v?.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
       title: 'Ventas',
@@ -283,6 +326,8 @@ export default function CpaPage() {
       width: 80,
       sorter: true,
       sortOrder: sortOrderFor('ventas'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaIntCell(v, record),
     },
     {
       title: 'CPA',
@@ -291,7 +336,8 @@ export default function CpaPage() {
       width: 100,
       sorter: true,
       sortOrder: sortOrderFor('cpa'),
-      render: (v: number) => v?.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
       title: 'Utilidad Aprox.',
@@ -300,11 +346,18 @@ export default function CpaPage() {
       width: 130,
       sorter: true,
       sortOrder: sortOrderFor('utilidad_aproximada'),
-      render: (v: number) => (
-        <span style={{ color: v >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
-          {v?.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}
-        </span>
-      ),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => {
+        if (isCpaValueAbsent(v)) return <span>{CPA_EMPTY}</span>;
+        const n = Number(v);
+        if (Number.isNaN(n)) return <span>{CPA_EMPTY}</span>;
+        if (n === 0 && !hasAnyNumericCpaActivity(record)) return <span>{CPA_EMPTY}</span>;
+        return (
+          <span style={{ color: n >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
+            {n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}
+          </span>
+        );
+      },
     },
     {
       title: 'Acciones',
