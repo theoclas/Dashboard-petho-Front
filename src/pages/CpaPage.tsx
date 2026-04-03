@@ -18,11 +18,30 @@ import {
   Tooltip,
 } from 'antd';
 import type { TableProps } from 'antd';
+import type { AxiosError } from 'axios';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
-import { getCpas, createCpa, updateCpa, deleteCpa, importFile, getUniqueProductNames, getCpaDistinctProductos } from '../api';
+import {
+  getCpas,
+  createCpa,
+  updateCpa,
+  deleteCpa,
+  importFile,
+  getUniqueProductNames,
+  getCpaDistinctProductos,
+  wipeCpaTable,
+} from '../api';
+import { useAuth } from '../contexts/AuthContext';
 import dayjs from 'dayjs';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
+
+function wipeErrMsg(e: unknown): string {
+  const ax = e as AxiosError<{ message?: string | string[] }>;
+  const m = ax.response?.data?.message;
+  if (m) return Array.isArray(m) ? m.join(', ') : m;
+  if (e instanceof Error) return e.message;
+  return 'Error desconocido';
+}
 
 interface CpaRecord {
   id: number;
@@ -44,6 +63,7 @@ interface CpaRecord {
 }
 
 export default function CpaPage() {
+  const { user } = useAuth();
   const [data, setData] = useState<CpaRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -58,6 +78,8 @@ export default function CpaPage() {
   const [importProgress, setImportProgress] = useState(0);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [errorsModalOpen, setErrorsModalOpen] = useState(false);
+  const [wipePassword, setWipePassword] = useState('');
+  const [wipeLoading, setWipeLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -267,6 +289,46 @@ export default function CpaPage() {
     return false;
   };
 
+  const openWipeCpaConfirm = () => {
+    const pwd = wipePassword.trim();
+    if (!pwd) {
+      message.warning('Escribe la contraseña de limpieza (la misma que IMPORT_WIPE_SECRET en el servidor).');
+      return;
+    }
+    Modal.confirm({
+      title: '¿Vaciar toda la tabla de CPA?',
+      width: 480,
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>
+            Se eliminarán <strong>todos los registros</strong> de la tabla <strong>cpas</strong>.
+          </p>
+          <Text type="secondary" style={{ fontSize: 13, display: 'block' }}>
+            Misma contraseña que en Importar → limpieza masiva (IMPORT_WIPE_SECRET). No se puede deshacer.
+          </Text>
+        </div>
+      ),
+      okText: 'Sí, borrar todo',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setWipeLoading(true);
+        try {
+          const res = await wipeCpaTable(pwd);
+          message.success(`Eliminados ${res.deleted} registro(s) de CPA.`);
+          setWipePassword('');
+          await fetchData();
+          await fetchCpaProductos();
+        } catch (e: unknown) {
+          message.error(wipeErrMsg(e));
+          throw e;
+        } finally {
+          setWipeLoading(false);
+        }
+      },
+    });
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -303,6 +365,27 @@ export default function CpaPage() {
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             Nuevo Registro
           </Button>
+          {user?.role === 'ADMIN' && (
+            <>
+              <Input.Password
+                placeholder="Contraseña IMPORT_WIPE_SECRET"
+                value={wipePassword}
+                onChange={(e) => setWipePassword(e.target.value)}
+                style={{ width: 200 }}
+                disabled={wipeLoading}
+              />
+              <Tooltip title="Elimina todos los registros CPA; requiere la misma clave del .env del servidor.">
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={wipeLoading}
+                  onClick={openWipeCpaConfirm}
+                >
+                  Vaciar tabla CPA
+                </Button>
+              </Tooltip>
+            </>
+          )}
         </Space>
       </div>
 

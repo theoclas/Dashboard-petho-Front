@@ -237,4 +237,12 @@ export const wipeImportedTables = (password: string) =>
     .post<WipeImportedResponse>('/import/wipe-imported-tables', { password }, { timeout: 120000 })
     .then((r) => r.data);
 
+export type WipeCpaResponse = { deleted: number };
+
+/** Solo ADMIN; misma contraseña que IMPORT_WIPE_SECRET. Borra todos los registros de cpas. */
+export const wipeCpaTable = (password: string) =>
+  api
+    .post<WipeCpaResponse>('/import/wipe-cpa', { password }, { timeout: 120000 })
+    .then((r) => r.data);
+
 export default api;
