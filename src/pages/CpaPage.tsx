@@ -19,7 +19,13 @@ import {
 } from 'antd';
 import type { TableProps } from 'antd';
 import type { AxiosError } from 'axios';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  UploadOutlined,
+  DownloadOutlined,
+} from '@ant-design/icons';
 import {
   getCpas,
   createCpa,
@@ -29,11 +35,13 @@ import {
   getUniqueProductNames,
   getCpaDistinctProductos,
   wipeCpaTable,
+  exportCpaExcel,
 } from '../api';
 import { useAuth } from '../contexts/AuthContext';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 
 const { Title, Paragraph, Text } = Typography;
+const { RangePicker } = DatePicker;
 
 function wipeErrMsg(e: unknown): string {
   const ax = e as AxiosError<{ message?: string | string[] }>;
@@ -80,19 +88,67 @@ export default function CpaPage() {
   const [errorsModalOpen, setErrorsModalOpen] = useState(false);
   const [wipePassword, setWipePassword] = useState('');
   const [wipeLoading, setWipeLoading] = useState(false);
+  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null]);
+  const [exporting, setExporting] = useState(false);
+
+  const buildListParams = useCallback((): Record<string, unknown> => {
+    const params: Record<string, unknown> = { sortField, sortOrder };
+    if (productoFilter.trim()) params.producto = productoFilter.trim();
+    if (dateRange[0] && dateRange[1]) {
+      params.startDate = dateRange[0].format('YYYY-MM-DD');
+      params.endDate = dateRange[1].format('YYYY-MM-DD');
+    }
+    return params;
+  }, [productoFilter, sortField, sortOrder, dateRange]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, unknown> = { sortField, sortOrder };
-      if (productoFilter.trim()) params.producto = productoFilter.trim();
-      const result = await getCpas(params);
+      const result = await getCpas(buildListParams());
       setData(Array.isArray(result) ? result : []);
     } catch {
       message.error('Error cargando datos de CPA');
     }
     setLoading(false);
-  }, [productoFilter, sortField, sortOrder]);
+  }, [buildListParams]);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await exportCpaExcel(buildListParams());
+      const blob = res.data;
+      if (blob.type && blob.type.includes('application/json')) {
+        message.error('Error al exportar (respuesta inválida). Revisa sesión o despliegue del API.');
+        return;
+      }
+      const truncated =
+        String(res.headers['x-export-truncated'] ?? '').toLowerCase() === 'true';
+      const totalMatching = res.headers['x-export-total-matching'];
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const nameSuffix =
+        dateRange[0] && dateRange[1]
+          ? `${dateRange[0].format('YYYY-MM-DD')}_a_${dateRange[1].format('YYYY-MM-DD')}`
+          : dayjs().format('YYYY-MM-DD_HHmm');
+      a.download = `cpa_${nameSuffix}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      if (truncated && totalMatching != null) {
+        message.warning(
+          `Se exportaron las primeras 50.000 filas (${Number(totalMatching).toLocaleString()} coincidencias en total).`,
+        );
+      } else {
+        message.success('Excel descargado');
+      }
+    } catch {
+      message.error('Error al exportar a Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -334,6 +390,17 @@ export default function CpaPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={3} style={{ margin: 0 }}>📊 Gestión de CPA</Title>
         <Space wrap align="center">
+          <RangePicker
+            placeholder={['Desde', 'Hasta']}
+            format="DD/MM/YYYY"
+            value={dateRange[0] && dateRange[1] ? [dateRange[0], dateRange[1]] : null}
+            onChange={(dates) => {
+              const d0 = dates?.[0];
+              const d1 = dates?.[1];
+              if (!d0 || !d1) setDateRange([null, null]);
+              else setDateRange([d0, d1]);
+            }}
+          />
           <Select
             showSearch
             allowClear
@@ -362,6 +429,13 @@ export default function CpaPage() {
               <Progress percent={importProgress} size="small" status="active" />
             )}
           </Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExportExcel}
+            loading={exporting}
+          >
+            Exportar Excel
+          </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             Nuevo Registro
           </Button>

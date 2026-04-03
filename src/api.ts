@@ -87,6 +87,14 @@ export const getUniqueProductNames = () =>
 export const getCpas = (params?: Record<string, unknown>) =>
   api.get('/cpa', { params }).then((r) => r.data);
 
+/** Descarga Excel con los mismos filtros que el listado CPA (sin paginación). POST evita pérdida de query en proxies/caché. */
+export const exportCpaExcel = (body: Record<string, unknown>) =>
+  api.post<Blob>('/cpa/export', body, {
+    responseType: 'blob',
+    timeout: 300000,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
 export const getCpaDistinctProductos = () =>
   api.get<string[]>('/cpa/distinct-productos').then((r) => r.data);
 
