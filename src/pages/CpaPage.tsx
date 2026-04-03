@@ -1,13 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Table, Button, Modal, Form, Input, Space, Typography, message, Popconfirm, InputNumber, DatePicker, Upload, AutoComplete, Select,
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Space,
+  Typography,
+  message,
+  Popconfirm,
+  InputNumber,
+  DatePicker,
+  Upload,
+  AutoComplete,
+  Select,
+  Progress,
+  Tooltip,
 } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { getCpas, createCpa, updateCpa, deleteCpa, importFile, getUniqueProductNames, getCpaDistinctProductos } from '../api';
 import dayjs from 'dayjs';
 
-const { Title } = Typography;
+const { Title, Paragraph } = Typography;
 
 interface CpaRecord {
   id: number;
@@ -39,6 +54,10 @@ export default function CpaPage() {
   const [sortField, setSortField] = useState<string>('fecha');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
   const [form] = Form.useForm();
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [errorsModalOpen, setErrorsModalOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -225,21 +244,27 @@ export default function CpaPage() {
   ];
 
   const handleUpload = async (file: File) => {
-    setLoading(true);
+    setImporting(true);
+    setImportProgress(0);
+    setImportErrors([]);
     try {
-      const result = await importFile('cpa', file);
-      message.success(`${result.imported} registros importados.`);
-      if (result.errors && result.errors.length > 0) {
-        message.warning(`${result.errors.length} errores encontrados.`);
+      const result = await importFile('cpa', file, (pct) => setImportProgress(pct));
+      message.success(`${result.imported} registros importados correctamente.`);
+      if (result.errors?.length) {
+        setImportErrors(result.errors);
+        setErrorsModalOpen(true);
+        message.warning(`${result.errors.length} fila(s) con avisos; abra el detalle si lo necesita.`);
       }
       await fetchData();
       await fetchCpaProductos();
-    } catch (err: any) {
-      message.error(err.message || 'Error al importar');
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } }; message?: string };
+      message.error(ax.response?.data?.message ?? ax.message ?? 'Error al importar');
     } finally {
-      setLoading(false);
+      setImporting(false);
+      setImportProgress(0);
     }
-    return false; // Prevenir el comportamiento por defecto de Upload
+    return false;
   };
 
   return (
@@ -261,13 +286,20 @@ export default function CpaPage() {
                 .includes(input.toLowerCase())
             }
           />
-          <Upload
-            accept=".xlsx,.xls"
-            showUploadList={false}
-            beforeUpload={handleUpload}
-          >
-            <Button icon={<UploadOutlined />}>Importar Excel</Button>
-          </Upload>
+          <Space direction="vertical" size={4} style={{ minWidth: 200 }}>
+            <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={handleUpload} disabled={importing}>
+              <Tooltip
+                title="Hoja INPUT_DATA o Sheet1. Columnas flexibles: Semana, Fecha (DD/MM/YYYY, etc.), Producto, Cuenta, Gasto publicidad, Ventas y demás campos opcionales."
+              >
+                <Button icon={<UploadOutlined />} loading={importing}>
+                  Importar Excel
+                </Button>
+              </Tooltip>
+            </Upload>
+            {importing && importProgress > 0 && importProgress < 100 && (
+              <Progress percent={importProgress} size="small" status="active" />
+            )}
+          </Space>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             Nuevo Registro
           </Button>
@@ -294,6 +326,35 @@ export default function CpaPage() {
           }
         }}
       />
+
+      <Modal
+        title="Importación CPA — filas no cargadas"
+        open={errorsModalOpen}
+        onCancel={() => setErrorsModalOpen(false)}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          Estas filas del Excel no se incluyeron o tienen datos incompletos (por ejemplo falta fecha o producto).
+        </Paragraph>
+        <div
+          style={{
+            maxHeight: 360,
+            overflow: 'auto',
+            fontFamily: 'ui-monospace, monospace',
+            fontSize: 12,
+            lineHeight: 1.5,
+            padding: 8,
+            background: 'rgba(0,0,0,0.2)',
+            borderRadius: 6,
+          }}
+        >
+          {importErrors.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      </Modal>
 
       <Modal
         title={editingRecord ? 'Editar Registro CPA' : 'Nuevo Registro CPA'}
