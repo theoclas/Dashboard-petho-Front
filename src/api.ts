@@ -93,6 +93,38 @@ export const getCpaDistinctProductos = () =>
 export const getCpaStats = (params?: { startDate?: string; endDate?: string }) =>
   api.get('/cpa/stats', { params }).then((r) => r.data);
 
+export type CpaResumenNodeTipo = 'mes' | 'semana' | 'dia' | 'cuenta' | 'producto';
+
+export type CpaResumenMetrics = {
+  sumGasto: number;
+  sumConversaciones: number;
+  sumVentas: number;
+  sumUtilidad: number;
+  avgGananciaPromedio: number | null;
+  avgCpa: number | null;
+  cpaPonderado: number | null;
+};
+
+export type CpaResumenNode = {
+  tipo: CpaResumenNodeTipo;
+  key: string;
+  label: string;
+  metrics: CpaResumenMetrics;
+  children: CpaResumenNode[];
+};
+
+export type CpaResumenDiarioResponse = {
+  total: CpaResumenMetrics;
+  nodes: CpaResumenNode[];
+};
+
+export const getCpaResumenDiario = (params: {
+  startDate: string;
+  endDate: string;
+  producto?: string;
+}) =>
+  api.get<CpaResumenDiarioResponse>('/cpa/resumen-diario', { params }).then((r) => r.data);
+
 export const createCpa = (data: Record<string, unknown>) =>
   api.post('/cpa', data).then((r) => r.data);
 
