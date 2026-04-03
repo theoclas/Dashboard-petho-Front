@@ -186,6 +186,8 @@ export default function DashboardPage() {
       prefix: '$',
       isMoney: true,
       isCpa: true,
+      tooltip:
+        'CPA del periodo = suma de gasto publicidad ÷ suma de ventas (CPA) en el rango. No es la suma del campo CPA por fila. Excel “CPA (Prom)” suele ser promedio de celdas CPA y puede diferir ligeramente.',
     },
   ];
 
