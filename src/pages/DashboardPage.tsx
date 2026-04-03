@@ -36,7 +36,12 @@ interface Stats {
 }
 
 interface CpaStats {
+  /** Compat: coincide con cpaPromedio si existe. */
   totalCpa: number;
+  /** Promedio del campo CPA por fila (estilo Excel / CPA Resumen). */
+  cpaPromedio?: number | null;
+  /** Σ gasto ÷ Σ ventas. */
+  cpaPonderado?: number | null;
   totalGasto: number;
   totalUtilidadCpa: number;
   totalVentasCpa: number;
@@ -178,8 +183,11 @@ export default function DashboardPage() {
       color: '#faad14',
     },
     {
-      title: 'CPA Total',
-      value: cpaStats?.totalCpa || 0,
+      title: 'CPA promedio',
+      value:
+        cpaStats?.cpaPromedio != null && Number.isFinite(Number(cpaStats.cpaPromedio))
+          ? Number(cpaStats.cpaPromedio)
+          : cpaStats?.totalCpa || 0,
       dataKey: 'cpa_only',
       icon: <BarChartOutlined />,
       color: '#eb2f96',
@@ -187,7 +195,7 @@ export default function DashboardPage() {
       isMoney: true,
       isCpa: true,
       tooltip:
-        'CPA del periodo = suma de gasto publicidad ÷ suma de ventas (CPA) en el rango. No es la suma del campo CPA por fila. Excel “CPA (Prom)” suele ser promedio de celdas CPA y puede diferir ligeramente.',
+        'Promedio del campo CPA por fila en el rango (como “CPA prom.” en CPA Resumen / Excel). El CPA ponderado (Σ gasto ÷ Σ ventas) suele ser menor; no se usa la suma de CPAs por fila.',
     },
   ];
 
@@ -337,12 +345,21 @@ export default function DashboardPage() {
                 value={card.value}
                 prefix={card.icon}
                 suffix={card.suffix}
-                precision={card.isMoney ? 0 : undefined}
-                formatter={(v) =>
-                  card.isMoney
-                    ? `$${Number(v).toLocaleString()}`
-                    : Number(v).toLocaleString()
-                }
+                precision={card.isCpa ? undefined : card.isMoney ? 0 : undefined}
+                formatter={(v) => {
+                  const n = Number(v);
+                  if (card.isCpa) {
+                    if (!Number.isFinite(n)) return '—';
+                    return new Intl.NumberFormat('es-CO', {
+                      style: 'currency',
+                      currency: 'COP',
+                      maximumFractionDigits: 0,
+                    }).format(n);
+                  }
+                  return card.isMoney
+                    ? `$${Number(v).toLocaleString('es-CO')}`
+                    : Number(v).toLocaleString('es-CO');
+                }}
               />
             </Card>
           </Col>
