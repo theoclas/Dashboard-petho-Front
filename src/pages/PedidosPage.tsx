@@ -8,6 +8,7 @@ import {
   EditOutlined, SaveOutlined, CloseOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import type { FilterDropdownProps } from 'antd/es/table/interface';
 import { getPedidos, updatePedido, getProductosDetalle, remapearEstados, exportPedidosExcel } from '../api';
 import dayjs from 'dayjs';
 import { useAuth } from '../contexts/AuthContext';
@@ -68,6 +69,53 @@ const estadoColors: Record<string, string> = {
   'EN RUTA': 'geekblue',
 };
 
+/** Filtros por columna (servidor); `fecha` → query `fecha_contains`. */
+const PEDIDO_COLUMN_FILTER_KEYS = [
+  'id_dropi',
+  'estado_unificado',
+  'transportadora',
+  'ciudad',
+  'cliente',
+  'telefono',
+  'guia',
+  'notas_manuales',
+  'estado_operativo',
+  'notas',
+  'estatus_original',
+  'ultimo_mov',
+  'estado_cartera',
+  'venta',
+  'ganancia_calc',
+  'flete',
+  'cartera',
+  'dias_desde_ult_mov',
+  'fecha',
+] as const;
+
+type PedidoColumnFilterKey = (typeof PEDIDO_COLUMN_FILTER_KEYS)[number];
+
+const initialColumnFilters: Record<PedidoColumnFilterKey, string> = {
+  id_dropi: '',
+  estado_unificado: '',
+  transportadora: '',
+  ciudad: '',
+  cliente: '',
+  telefono: '',
+  guia: '',
+  notas_manuales: '',
+  estado_operativo: '',
+  notas: '',
+  estatus_original: '',
+  ultimo_mov: '',
+  estado_cartera: '',
+  venta: '',
+  ganancia_calc: '',
+  flete: '',
+  cartera: '',
+  dias_desde_ult_mov: '',
+  fecha: '',
+};
+
 export default function PedidosPage() {
   const { user } = useAuth();
   const [data, setData] = useState<Pedido[]>([]);
@@ -76,10 +124,7 @@ export default function PedidosPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [filters, setFilters] = useState({
-    estado_unificado: '',
-    transportadora: '',
-    ciudad: '',
-    id_dropi: '',
+    ...initialColumnFilters,
     startDate: '',
     endDate: '',
   });
@@ -93,11 +138,12 @@ export default function PedidosPage() {
 
   const buildListParams = useCallback((): Record<string, unknown> => {
     const params: Record<string, unknown> = { sortField, sortOrder };
-    if (filters.estado_unificado) params.estado_unificado = filters.estado_unificado;
-    if (filters.transportadora) params.transportadora = filters.transportadora;
-    if (filters.ciudad) params.ciudad = filters.ciudad;
-    if (filters.id_dropi) params.id_dropi = filters.id_dropi;
-    // Ambas o ninguna: si solo llega una al API, el backend no aplica rango y exporta “todo”.
+    for (const k of PEDIDO_COLUMN_FILTER_KEYS) {
+      const v = filters[k]?.trim();
+      if (!v) continue;
+      if (k === 'fecha') params.fecha_contains = v;
+      else params[k] = v;
+    }
     if (filters.startDate && filters.endDate) {
       params.startDate = filters.startDate;
       params.endDate = filters.endDate;
@@ -235,12 +281,17 @@ export default function PedidosPage() {
     return record[field];
   };
 
-  const getColumnSearchProps = (title: string) => ({
-    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => (
+  const getColumnSearchProps = (title: string, filterKey: PedidoColumnFilterKey) => ({
+    filterDropdown: ({
+      setSelectedKeys,
+      selectedKeys,
+      confirm,
+      clearFilters,
+    }: FilterDropdownProps) => (
       <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
         <Input
           placeholder={`Buscar ${title}`}
-          value={selectedKeys[0]}
+          value={String(selectedKeys[0] ?? '')}
           onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
           onPressEnter={() => confirm()}
           style={{ marginBottom: 8, display: 'block' }}
@@ -257,7 +308,7 @@ export default function PedidosPage() {
           </Button>
           <Button
             onClick={() => {
-              clearFilters && clearFilters();
+              clearFilters?.();
               confirm();
             }}
             size="small"
@@ -271,6 +322,7 @@ export default function PedidosPage() {
     filterIcon: (filtered: boolean) => (
       <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
     ),
+    filteredValue: filters[filterKey] ? [filters[filterKey]] : null,
   });
 
   const columns: ColumnsType<Pedido> = [
@@ -280,25 +332,30 @@ export default function PedidosPage() {
       width: 100,
       fixed: 'left',
       sorter: true,
-      ...getColumnSearchProps('ID Dropi'),
+      ...getColumnSearchProps('ID Dropi', 'id_dropi'),
     },
     {
       title: 'Fecha',
       dataIndex: 'fecha',
       width: 100,
       sorter: true,
-      render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '-',
+      ...getColumnSearchProps('fecha (texto)', 'fecha'),
+      render: (v: string) => (v ? dayjs(v).format('DD/MM/YYYY') : '-'),
     },
     {
       title: 'Cliente',
       dataIndex: 'cliente',
       width: 180,
+      sorter: true,
+      ...getColumnSearchProps('Cliente', 'cliente'),
       render: (_, r) => renderEditable('cliente', r),
     },
     {
       title: 'Teléfono',
       dataIndex: 'telefono',
       width: 120,
+      sorter: true,
+      ...getColumnSearchProps('Teléfono', 'telefono'),
       render: (_, r) => renderEditable('telefono', r),
     },
     {
@@ -306,12 +363,14 @@ export default function PedidosPage() {
       dataIndex: 'ciudad',
       width: 130,
       sorter: true,
-      ...getColumnSearchProps('Ciudad'),
+      ...getColumnSearchProps('Ciudad', 'ciudad'),
     },
     {
       title: 'Mis Notas',
       dataIndex: 'notas_manuales',
       width: 200,
+      sorter: true,
+      ...getColumnSearchProps('Mis notas', 'notas_manuales'),
       ellipsis: { showTitle: false },
       render: (v: string, r: Pedido) => {
         if (editingId === r.id && user?.role !== 'LECTOR') {
@@ -337,17 +396,21 @@ export default function PedidosPage() {
       dataIndex: 'transportadora',
       width: 140,
       sorter: true,
-      ...getColumnSearchProps('Transportadora'),
+      ...getColumnSearchProps('Transportadora', 'transportadora'),
     },
     {
       title: 'Guía',
       dataIndex: 'guia',
       width: 140,
+      sorter: true,
+      ...getColumnSearchProps('Guía', 'guia'),
     },
     {
       title: 'Operativo',
       dataIndex: 'estado_operativo',
       width: 130,
+      sorter: true,
+      ...getColumnSearchProps('Operativo', 'estado_operativo'),
       render: (v: string) => (
         <Tag color={estadoColors[v] || 'default'}>{v || '-'}</Tag>
       ),
@@ -357,6 +420,8 @@ export default function PedidosPage() {
       dataIndex: 'venta',
       width: 100,
       align: 'right',
+      sorter: true,
+      ...getColumnSearchProps('Venta', 'venta'),
       render: (v: number) => `$${Number(v || 0).toLocaleString()}`,
     },
     {
@@ -364,6 +429,8 @@ export default function PedidosPage() {
       dataIndex: 'ganancia_calc',
       width: 100,
       align: 'right',
+      sorter: true,
+      ...getColumnSearchProps('Ganancia', 'ganancia_calc'),
       render: (v: number) => {
         const num = Number(v || 0);
         return (
@@ -378,6 +445,8 @@ export default function PedidosPage() {
       dataIndex: 'flete',
       width: 90,
       align: 'right',
+      sorter: true,
+      ...getColumnSearchProps('Flete', 'flete'),
       render: (v: number) => `$${Number(v || 0).toLocaleString()}`,
     },
     {
@@ -385,6 +454,8 @@ export default function PedidosPage() {
       dataIndex: 'cartera',
       width: 100,
       align: 'right',
+      sorter: true,
+      ...getColumnSearchProps('Cartera', 'cartera'),
       render: (v: number) => {
         const num = Number(v || 0);
         return (
@@ -398,6 +469,8 @@ export default function PedidosPage() {
       title: 'Est. Cartera',
       dataIndex: 'estado_cartera',
       width: 90,
+      sorter: true,
+      ...getColumnSearchProps('Est. Cartera', 'estado_cartera'),
       render: (v: string) => v === 'OK' ? <Tag color="green">OK</Tag> : '-',
     },
     {
@@ -405,6 +478,8 @@ export default function PedidosPage() {
       dataIndex: 'dias_desde_ult_mov',
       width: 90,
       align: 'center',
+      sorter: true,
+      ...getColumnSearchProps('Días últ. mov', 'dias_desde_ult_mov'),
       render: (v: number) => {
         if (!v && v !== 0) return '-';
         return <Tag color={v > 5 ? 'red' : v > 2 ? 'orange' : 'green'}>{v}</Tag>;
@@ -414,6 +489,8 @@ export default function PedidosPage() {
       title: 'Notas Dropi',
       dataIndex: 'notas',
       width: 200,
+      sorter: true,
+      ...getColumnSearchProps('Notas Dropi', 'notas'),
       ellipsis: { showTitle: false },
       render: (v: string, r: Pedido) => {
         if (editingId === r.id && user?.role !== 'LECTOR') {
@@ -437,12 +514,16 @@ export default function PedidosPage() {
       title: 'Estado Dropi',
       dataIndex: 'estatus_original',
       width: 140,
+      sorter: true,
+      ...getColumnSearchProps('Estado Dropi', 'estatus_original'),
       render: (v: string) => <Text type="secondary">{v || '-'}</Text>,
     },
     {
       title: 'Últ. Mov. Dropi',
       dataIndex: 'ultimo_mov',
       width: 150,
+      sorter: true,
+      ...getColumnSearchProps('Últ. mov. Dropi', 'ultimo_mov'),
       ellipsis: { showTitle: false },
       render: (v: string) => (
         <Tooltip title={v}>
@@ -454,7 +535,8 @@ export default function PedidosPage() {
       title: 'Estado Asignado',
       dataIndex: 'estado_unificado',
       width: 150,
-      ...getColumnSearchProps('Estado'),
+      sorter: true,
+      ...getColumnSearchProps('Estado asignado', 'estado_unificado'),
       render: (v: string) => (
         <Tag color={estadoColors[v] || 'default'}>{v || '-'}</Tag>
       ),
@@ -598,30 +680,37 @@ export default function PedidosPage() {
           pageSizeOptions: [25, 50, 100, 200, 800],
           showTotal: (t) => `Total: ${t.toLocaleString()}`,
         }}
-        onChange={(pagination, tableFilters: any, sorter: any, extra) => {
+        onChange={(pagination, tableFilters, sorter, extra) => {
           if (extra.action === 'paginate') {
             setPage(pagination.current || 1);
             setLimit(pagination.pageSize || 25);
-            setSelectedRowKeys([]); // Limpiar selección al cambiar página
+            setSelectedRowKeys([]);
           } else {
-            setPage(1); // Mover a primera página al filtrar u ordenar
-            
-            if (sorter.field && sorter.order) {
-              setSortField(sorter.field);
-              setSortOrder(sorter.order === 'ascend' ? 'ASC' : 'DESC');
+            setPage(1);
+
+            const ord = Array.isArray(sorter) ? sorter[0] : sorter;
+            const fieldRaw = ord && typeof ord === 'object' ? ord.field : undefined;
+            const sortCol =
+              fieldRaw == null ? undefined : Array.isArray(fieldRaw) ? String(fieldRaw[0]) : String(fieldRaw);
+            const order = ord && typeof ord === 'object' ? ord.order : undefined;
+            if (sortCol && order) {
+              setSortField(sortCol);
+              setSortOrder(order === 'ascend' ? 'ASC' : 'DESC');
             } else {
               setSortField('id');
               setSortOrder('DESC');
             }
 
-            setFilters((prev) => ({
-              ...prev,
-              id_dropi: tableFilters.id_dropi?.[0] || '',
-              estado_unificado: tableFilters.estado_unificado?.[0] || '',
-              transportadora: tableFilters.transportadora?.[0] || '',
-              ciudad: tableFilters.ciudad?.[0] || '',
-            }));
-            setSelectedRowKeys([]); // Limpiar selección al filtrar u ordenar
+            setFilters((prev) => {
+              const next = { ...prev };
+              for (const k of PEDIDO_COLUMN_FILTER_KEYS) {
+                const fv = tableFilters?.[k];
+                const first = Array.isArray(fv) ? fv[0] : undefined;
+                next[k] = first != null && first !== '' ? String(first) : '';
+              }
+              return next;
+            });
+            setSelectedRowKeys([]);
           }
         }}
         expandable={{
