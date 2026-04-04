@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Typography, Select, Tag, message, Popconfirm } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import {
+  Table,
+  Button,
+  Typography,
+  Select,
+  Tag,
+  message,
+  Popconfirm,
+  Modal,
+  Form,
+  Input,
+  Switch,
+  Space,
+} from 'antd';
+import { ReloadOutlined, UserAddOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import api from '../api';
 
@@ -19,6 +32,9 @@ interface User {
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [form] = Form.useForm();
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -42,6 +58,43 @@ export default function UsersPage() {
       fetchUsers();
     } catch {
       message.error('Error al actualizar usuario');
+    }
+  };
+
+  const openCreateModal = () => {
+    form.setFieldsValue({
+      role: 'LECTOR',
+      is_active: true,
+    });
+    setCreateOpen(true);
+  };
+
+  const closeCreateModal = () => {
+    setCreateOpen(false);
+    form.resetFields();
+  };
+
+  const handleCreateUser = async () => {
+    try {
+      const values = await form.validateFields();
+      setCreateLoading(true);
+      await api.post('/users', {
+        email: values.email.trim(),
+        username: values.username.trim(),
+        password: values.password,
+        role: values.role,
+        is_active: values.is_active,
+      });
+      message.success('Usuario creado');
+      closeCreateModal();
+      fetchUsers();
+    } catch (err: unknown) {
+      const e = err as { errorFields?: unknown; response?: { data?: { message?: string | string[] } } };
+      if (e.errorFields) return;
+      const msg = e.response?.data?.message;
+      message.error(Array.isArray(msg) ? String(msg[0]) : msg || 'Error al crear usuario');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -106,9 +159,14 @@ export default function UsersPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={3} style={{ margin: 0 }}>👥 Administración de Usuarios</Title>
-        <Button icon={<ReloadOutlined />} onClick={fetchUsers}>
-          Recargar
-        </Button>
+        <Space>
+          <Button type="primary" icon={<UserAddOutlined />} onClick={openCreateModal}>
+            Nuevo usuario
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchUsers}>
+            Recargar
+          </Button>
+        </Space>
       </div>
       <Table<User>
         columns={columns}
@@ -118,6 +176,74 @@ export default function UsersPage() {
         size="small"
         pagination={{ pageSize: 20 }}
       />
+
+      <Modal
+        title="Crear usuario"
+        open={createOpen}
+        onOk={handleCreateUser}
+        onCancel={closeCreateModal}
+        confirmLoading={createLoading}
+        okText="Crear"
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
+          <Form.Item
+            name="username"
+            label="Usuario"
+            rules={[{ required: true, message: 'Ingresa el nombre de usuario' }]}
+          >
+            <Input placeholder="Nombre de usuario" autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Correo"
+            rules={[
+              { required: true, message: 'Ingresa el correo' },
+              { type: 'email', message: 'Correo inválido' },
+            ]}
+          >
+            <Input placeholder="correo@ejemplo.com" autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="Contraseña"
+            rules={[
+              { required: true, message: 'Ingresa la contraseña' },
+              { min: 6, message: 'Mínimo 6 caracteres' },
+            ]}
+          >
+            <Input.Password placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="password2"
+            label="Confirmar contraseña"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Confirma la contraseña' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Las contraseñas no coinciden'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Repite la contraseña" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item name="role" label="Rol" rules={[{ required: true }]}>
+            <Select placeholder="Rol">
+              <Option value="LECTOR">Lector</Option>
+              <Option value="OPERADOR">Operador</Option>
+              <Option value="ADMIN">Administrador</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="is_active" label="Cuenta activa" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
