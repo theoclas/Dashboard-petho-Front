@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode, type CSSProperties } from 'react';
 import { Card, Row, Col, Statistic, Typography, Spin, Space, DatePicker, Divider, Tooltip } from 'antd';
 import { Pie, Column, Line } from '@ant-design/charts';
 import {
@@ -100,7 +100,7 @@ export default function DashboardPage() {
     tooltip?: string;
   };
 
-  const cards: DashCard[] = [
+  const cardsVolumen: DashCard[] = [
     {
       title: 'Total Pedidos',
       value: stats.total,
@@ -125,6 +125,16 @@ export default function DashboardPage() {
       tooltip: 'Suma de unidades (cantidad) en el detalle de productos de esos pedidos.',
     },
     {
+      title: 'Sin Mapear',
+      value: stats.sinMapear,
+      dataKey: 'sinMapear',
+      icon: <WarningOutlined />,
+      color: '#faad14',
+    },
+  ];
+
+  const cardsEstados: DashCard[] = [
+    {
       title: 'Entregados',
       value: stats.entregados,
       dataKey: 'entregados',
@@ -148,6 +158,9 @@ export default function DashboardPage() {
       color: '#faad14',
       suffix: `(${((stats.enProceso / (stats.total || 1)) * 100).toFixed(1)}%)`,
     },
+  ];
+
+  const cardsFinanzas: DashCard[] = [
     {
       title: 'Total Ventas',
       value: stats.totalVentas,
@@ -175,13 +188,9 @@ export default function DashboardPage() {
       prefix: '$',
       isMoney: true,
     },
-    {
-      title: 'Sin Mapear',
-      value: stats.sinMapear,
-      dataKey: 'sinMapear',
-      icon: <WarningOutlined />,
-      color: '#faad14',
-    },
+  ];
+
+  const cardsCpa: DashCard[] = [
     {
       title: 'CPA promedio',
       value:
@@ -198,6 +207,66 @@ export default function DashboardPage() {
         'Promedio del campo CPA por fila en el rango (como “CPA prom.” en CPA Resumen / Excel). El CPA ponderado (Σ gasto ÷ Σ ventas) suele ser menor; no se usa la suma de CPAs por fila.',
     },
   ];
+
+  const cards: DashCard[] = [...cardsVolumen, ...cardsEstados, ...cardsFinanzas, ...cardsCpa];
+
+  const groupCardStyle: CSSProperties = {
+    background: '#141428',
+    border: '1px solid rgba(255,255,255,0.06)',
+  };
+  const groupHeaderStyle = { borderBottom: '1px solid rgba(255,255,255,0.06)' };
+
+  const renderMetricCard = (card: DashCard, colProps: { xs: number; sm: number; md: number; lg: number }) => (
+    <Col {...colProps} key={card.title}>
+      <Card
+        hoverable
+        onClick={() => {
+          if (!card.isCpa) {
+            setSelectedMetric(card.dataKey as keyof Stats);
+          }
+        }}
+        style={{
+          borderTop: `3px solid ${card.color}`,
+          cursor: card.isCpa ? 'default' : 'pointer',
+          border: !card.isCpa && selectedMetric === card.dataKey ? `2px solid ${card.color}` : `1px solid rgba(255,255,255,0.06)`,
+          transform: !card.isCpa && selectedMetric === card.dataKey ? 'scale(1.02)' : 'none',
+          transition: 'all 0.3s ease',
+          background: !card.isCpa && selectedMetric === card.dataKey ? 'rgba(255,255,255,0.05)' : undefined,
+        }}
+      >
+        <Statistic
+          title={
+            card.tooltip ? (
+              <span>
+                {card.title}{' '}
+                <Tooltip title={card.tooltip}>
+                  <QuestionCircleOutlined style={{ opacity: 0.55, fontSize: 12, cursor: 'help' }} />
+                </Tooltip>
+              </span>
+            ) : (
+              card.title
+            )
+          }
+          value={card.value}
+          prefix={card.icon}
+          suffix={card.suffix}
+          precision={card.isCpa ? undefined : card.isMoney ? 0 : undefined}
+          formatter={(v) => {
+            const n = Number(v);
+            if (card.isCpa) {
+              if (!Number.isFinite(n)) return '—';
+              return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                maximumFractionDigits: 0,
+              }).format(n);
+            }
+            return card.isMoney ? `$${Number(v).toLocaleString('es-CO')}` : Number(v).toLocaleString('es-CO');
+          }}
+        />
+      </Card>
+    </Col>
+  );
 
   const axisMuted = 'rgba(255,255,255,0.12)';
   const axisLabel = 'rgba(255,255,255,0.72)';
@@ -310,61 +379,39 @@ export default function DashboardPage() {
           />
         </Space>
       </div>
-      <Row gutter={[16, 16]}>
-        {cards.map((card) => (
-          <Col xs={24} sm={12} md={8} lg={6} key={card.title}>
-            <Card
-              hoverable
-              onClick={() => {
-                if (!card.isCpa) {
-                  setSelectedMetric(card.dataKey as keyof Stats);
-                }
-              }}
-              style={{
-                borderTop: `3px solid ${card.color}`,
-                cursor: card.isCpa ? 'default' : 'pointer',
-                border: (!card.isCpa && selectedMetric === card.dataKey) ? `2px solid ${card.color}` : `1px solid rgba(255,255,255,0.06)`,
-                transform: (!card.isCpa && selectedMetric === card.dataKey) ? 'scale(1.02)' : 'none',
-                transition: 'all 0.3s ease',
-                background: (!card.isCpa && selectedMetric === card.dataKey) ? 'rgba(255,255,255,0.05)' : undefined
-              }}
-            >
-              <Statistic
-                title={
-                  card.tooltip ? (
-                    <span>
-                      {card.title}{' '}
-                      <Tooltip title={card.tooltip}>
-                        <QuestionCircleOutlined style={{ opacity: 0.55, fontSize: 12, cursor: 'help' }} />
-                      </Tooltip>
-                    </span>
-                  ) : (
-                    card.title
-                  )
-                }
-                value={card.value}
-                prefix={card.icon}
-                suffix={card.suffix}
-                precision={card.isCpa ? undefined : card.isMoney ? 0 : undefined}
-                formatter={(v) => {
-                  const n = Number(v);
-                  if (card.isCpa) {
-                    if (!Number.isFinite(n)) return '—';
-                    return new Intl.NumberFormat('es-CO', {
-                      style: 'currency',
-                      currency: 'COP',
-                      maximumFractionDigits: 0,
-                    }).format(n);
-                  }
-                  return card.isMoney
-                    ? `$${Number(v).toLocaleString('es-CO')}`
-                    : Number(v).toLocaleString('es-CO');
-                }}
-              />
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Card
+          title="Volumen y pedidos"
+          style={groupCardStyle}
+          styles={{ header: groupHeaderStyle }}
+        >
+          <Row gutter={[16, 16]}>
+            {cardsVolumen.map((card) => renderMetricCard(card, { xs: 24, sm: 12, md: 12, lg: 6 }))}
+          </Row>
+        </Card>
+
+        <Card
+          title="Estados de entrega"
+          style={groupCardStyle}
+          styles={{ header: groupHeaderStyle }}
+        >
+          <Row gutter={[16, 16]}>
+            {cardsEstados.map((card) => renderMetricCard(card, { xs: 24, sm: 12, md: 8, lg: 8 }))}
+          </Row>
+        </Card>
+
+        <Card
+          title="Finanzas"
+          style={groupCardStyle}
+          styles={{ header: groupHeaderStyle }}
+        >
+          <Row gutter={[16, 16]}>
+            {[...cardsFinanzas, ...cardsCpa].map((card) =>
+              renderMetricCard(card, { xs: 24, sm: 12, md: 12, lg: 6 }),
+            )}
+          </Row>
+        </Card>
+      </Space>
 
       {stats.daily && stats.daily.length > 0 && (
         <div style={{ marginTop: 24 }}>
