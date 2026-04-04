@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Table,
   Button,
@@ -12,7 +12,6 @@ import {
   InputNumber,
   DatePicker,
   Upload,
-  AutoComplete,
   Select,
   Progress,
   Tooltip,
@@ -32,7 +31,6 @@ import {
   updateCpa,
   deleteCpa,
   importFile,
-  getUniqueProductNames,
   getCpaDistinctProductos,
   wipeCpaTable,
   exportCpaExcel,
@@ -61,7 +59,12 @@ function hasAnyNumericCpaActivity(r: CpaRecord): boolean {
     pos(r.utilidad_aproximada) ||
     pos(r.cpa) ||
     pos(r.conversaciones) ||
-    pos(r.ganancia_promedio)
+    pos(r.ganancia_promedio) ||
+    pos(r.total_facturado) ||
+    pos(r.ticket_promedio_producto) ||
+    pos(r.conversion_rate) ||
+    pos(r.costo_publicitario) ||
+    pos(r.rentabilidad)
   );
 }
 
@@ -83,6 +86,17 @@ function fmtCpaIntCell(v: unknown, r: CpaRecord): string {
   if (Number.isNaN(n)) return CPA_EMPTY;
   if (n === 0 && !hasAnyNumericCpaActivity(r)) return CPA_EMPTY;
   return n.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+}
+
+function fmtCpaDecimalCell(v: unknown, r: CpaRecord, fractionDigits: number): string {
+  if (isCpaValueAbsent(v)) return CPA_EMPTY;
+  const n = Number(v);
+  if (Number.isNaN(n)) return CPA_EMPTY;
+  if (n === 0 && !hasAnyNumericCpaActivity(r)) return CPA_EMPTY;
+  return n.toLocaleString('es-CO', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: 0,
+  });
 }
 
 function wipeErrMsg(e: unknown): string {
@@ -112,13 +126,88 @@ interface CpaRecord {
   utilidad_aproximada: number | null;
 }
 
+/** Vista previa local; debe coincidir con `applyCpaDerivedFields` en el API. */
+function previewCpaDerived(values: {
+  gasto_publicidad?: number | null;
+  ventas?: number | null;
+  conversaciones?: number | null;
+  total_facturado?: number | null;
+  ganancia_promedio?: number | null;
+}) {
+  const roundDec = (n: number, scale: number) =>
+    Math.round(n * 10 ** scale) / 10 ** scale;
+
+  const gasto =
+    values.gasto_publicidad != null && !Number.isNaN(Number(values.gasto_publicidad))
+      ? Number(values.gasto_publicidad)
+      : null;
+  const ventas =
+    values.ventas != null && !Number.isNaN(Number(values.ventas))
+      ? Math.trunc(Number(values.ventas))
+      : null;
+  const conv =
+    values.conversaciones != null && !Number.isNaN(Number(values.conversaciones))
+      ? Math.trunc(Number(values.conversaciones))
+      : null;
+  const total =
+    values.total_facturado != null && !Number.isNaN(Number(values.total_facturado))
+      ? Number(values.total_facturado)
+      : null;
+  const gan =
+    values.ganancia_promedio != null && !Number.isNaN(Number(values.ganancia_promedio))
+      ? Number(values.ganancia_promedio)
+      : null;
+
+  const costo_publicitario = gasto != null ? roundDec(gasto, 2) : null;
+  let ticket_promedio_producto: number | null = null;
+  let cpa: number | null = null;
+  if (ventas != null && ventas > 0) {
+    ticket_promedio_producto = total != null ? roundDec(total / ventas, 2) : null;
+    cpa = gasto != null ? roundDec(gasto / ventas, 2) : null;
+  }
+  const conversion_rate =
+    conv != null && conv > 0 && ventas != null && !Number.isNaN(ventas)
+      ? roundDec(ventas / conv, 4)
+      : null;
+  const utilidad_aproximada =
+    gan != null && ventas != null && gasto != null
+      ? roundDec(gan * ventas - gasto, 2)
+      : null;
+  const util =
+    utilidad_aproximada != null && !Number.isNaN(utilidad_aproximada)
+      ? utilidad_aproximada
+      : null;
+  const rentabilidad =
+    gasto != null && gasto > 0 && util != null
+      ? roundDec(util / gasto, 4)
+      : null;
+
+  return {
+    costo_publicitario,
+    ticket_promedio_producto,
+    cpa,
+    conversion_rate,
+    utilidad_aproximada,
+    rentabilidad,
+  };
+}
+
+function fmtPreviewMoney(n: number | null): string {
+  if (n == null || Number.isNaN(n)) return '—';
+  return n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+}
+
+function fmtPreviewRatio(n: number | null): string {
+  if (n == null || Number.isNaN(n)) return '—';
+  return n.toLocaleString('es-CO', { maximumFractionDigits: 4 });
+}
+
 export default function CpaPage() {
   const { user } = useAuth();
   const [data, setData] = useState<CpaRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CpaRecord | null>(null);
-  const [uniqueProducts, setUniqueProducts] = useState<{ value: string }[]>([]);
   const [cpaProductos, setCpaProductos] = useState<string[]>([]);
   const [productoFilter, setProductoFilter] = useState('');
   const [sortField, setSortField] = useState<string>('fecha');
@@ -192,17 +281,6 @@ export default function CpaPage() {
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      const result = await getUniqueProductNames();
-      if (Array.isArray(result)) {
-        setUniqueProducts(result.map((name: string) => ({ value: name })));
-      }
-    } catch {
-      // Ignorar error de productos por ahora
-    }
-  };
-
   const fetchCpaProductos = async () => {
     try {
       const list = await getCpaDistinctProductos();
@@ -217,9 +295,25 @@ export default function CpaPage() {
   }, [fetchData]);
 
   useEffect(() => {
-    fetchProducts();
     fetchCpaProductos();
   }, []);
+
+  const gastoW = Form.useWatch('gasto_publicidad', form);
+  const ventasW = Form.useWatch('ventas', form);
+  const convW = Form.useWatch('conversaciones', form);
+  const totalW = Form.useWatch('total_facturado', form);
+  const ganW = Form.useWatch('ganancia_promedio', form);
+  const derivedPreview = useMemo(
+    () =>
+      previewCpaDerived({
+        gasto_publicidad: gastoW,
+        ventas: ventasW,
+        conversaciones: convW,
+        total_facturado: totalW,
+        ganancia_promedio: ganW,
+      }),
+    [gastoW, ventasW, convW, totalW, ganW],
+  );
 
   const handleAdd = () => {
     setEditingRecord(null);
@@ -230,8 +324,15 @@ export default function CpaPage() {
   const handleEdit = (record: CpaRecord) => {
     setEditingRecord(record);
     form.setFieldsValue({
-      ...record,
+      semana: record.semana,
       fecha: record.fecha ? dayjs(record.fecha) : null,
+      producto: record.producto,
+      cuenta_publicitaria: record.cuenta_publicitaria,
+      gasto_publicidad: record.gasto_publicidad,
+      conversaciones: record.conversaciones,
+      total_facturado: record.total_facturado,
+      ganancia_promedio: record.ganancia_promedio,
+      ventas: record.ventas,
     });
     setModalOpen(true);
   };
@@ -251,8 +352,15 @@ export default function CpaPage() {
     try {
       const values = await form.validateFields();
       const payload = {
-        ...values,
+        semana: values.semana,
         fecha: values.fecha ? values.fecha.toISOString() : null,
+        producto: values.producto,
+        cuenta_publicitaria: values.cuenta_publicitaria,
+        gasto_publicidad: values.gasto_publicidad,
+        conversaciones: values.conversaciones,
+        total_facturado: values.total_facturado,
+        ganancia_promedio: values.ganancia_promedio,
+        ventas: values.ventas,
       };
 
       if (editingRecord) {
@@ -273,12 +381,24 @@ export default function CpaPage() {
   const sortOrderFor = (field: string) =>
     sortField === field ? (sortOrder === 'ASC' ? ('ascend' as const) : ('descend' as const)) : undefined;
 
+  /** Mismo orden que la exportación Excel del API (hoja CPA). */
   const columns: TableProps<CpaRecord>['columns'] = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 72,
+      fixed: 'left' as const,
+      sorter: true,
+      sortOrder: sortOrderFor('id'),
+      align: 'right',
+    },
     {
       title: 'Semana',
       dataIndex: 'semana',
       key: 'semana',
       width: 100,
+      ellipsis: true,
       sorter: true,
       sortOrder: sortOrderFor('semana'),
     },
@@ -286,36 +406,66 @@ export default function CpaPage() {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 120,
+      width: 108,
       sorter: true,
       sortOrder: sortOrderFor('fecha'),
-      render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '-',
+      render: (v: string) => (v ? dayjs(v).format('DD/MM/YYYY') : '—'),
     },
     {
       title: 'Producto',
       dataIndex: 'producto',
       key: 'producto',
-      width: 200,
+      width: 180,
       ellipsis: true,
       sorter: true,
       sortOrder: sortOrderFor('producto'),
     },
     {
-      title: 'Cuenta',
+      title: 'Cuenta publicitaria',
       dataIndex: 'cuenta_publicitaria',
       key: 'cuenta_publicitaria',
-      width: 150,
+      width: 140,
       ellipsis: true,
       sorter: true,
       sortOrder: sortOrderFor('cuenta_publicitaria'),
     },
     {
-      title: 'Gasto Pub.',
+      title: 'Gasto publicidad',
       dataIndex: 'gasto_publicidad',
       key: 'gasto_publicidad',
-      width: 120,
+      width: 128,
       sorter: true,
       sortOrder: sortOrderFor('gasto_publicidad'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
+    },
+    {
+      title: 'Conversaciones',
+      dataIndex: 'conversaciones',
+      key: 'conversaciones',
+      width: 110,
+      sorter: true,
+      sortOrder: sortOrderFor('conversaciones'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaIntCell(v, record),
+    },
+    {
+      title: 'Total facturado',
+      dataIndex: 'total_facturado',
+      key: 'total_facturado',
+      width: 128,
+      sorter: true,
+      sortOrder: sortOrderFor('total_facturado'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
+    },
+    {
+      title: 'Ganancia promedio',
+      dataIndex: 'ganancia_promedio',
+      key: 'ganancia_promedio',
+      width: 128,
+      sorter: true,
+      sortOrder: sortOrderFor('ganancia_promedio'),
       align: 'right',
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
@@ -323,27 +473,67 @@ export default function CpaPage() {
       title: 'Ventas',
       dataIndex: 'ventas',
       key: 'ventas',
-      width: 80,
+      width: 84,
       sorter: true,
       sortOrder: sortOrderFor('ventas'),
       align: 'right',
       render: (v: unknown, record: CpaRecord) => fmtCpaIntCell(v, record),
     },
     {
+      title: 'Ticket prom. producto',
+      dataIndex: 'ticket_promedio_producto',
+      key: 'ticket_promedio_producto',
+      width: 132,
+      sorter: true,
+      sortOrder: sortOrderFor('ticket_promedio_producto'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
+    },
+    {
       title: 'CPA',
       dataIndex: 'cpa',
       key: 'cpa',
-      width: 100,
+      width: 104,
       sorter: true,
       sortOrder: sortOrderFor('cpa'),
       align: 'right',
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
-      title: 'Utilidad Aprox.',
+      title: 'Conversion rate',
+      dataIndex: 'conversion_rate',
+      key: 'conversion_rate',
+      width: 118,
+      sorter: true,
+      sortOrder: sortOrderFor('conversion_rate'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaDecimalCell(v, record, 4),
+    },
+    {
+      title: 'Costo publicitario',
+      dataIndex: 'costo_publicitario',
+      key: 'costo_publicitario',
+      width: 128,
+      sorter: true,
+      sortOrder: sortOrderFor('costo_publicitario'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
+    },
+    {
+      title: 'Rentabilidad',
+      dataIndex: 'rentabilidad',
+      key: 'rentabilidad',
+      width: 108,
+      sorter: true,
+      sortOrder: sortOrderFor('rentabilidad'),
+      align: 'right',
+      render: (v: unknown, record: CpaRecord) => fmtCpaDecimalCell(v, record, 4),
+    },
+    {
+      title: 'Utilidad aproximada',
       dataIndex: 'utilidad_aproximada',
       key: 'utilidad_aproximada',
-      width: 130,
+      width: 136,
       sorter: true,
       sortOrder: sortOrderFor('utilidad_aproximada'),
       align: 'right',
@@ -361,6 +551,7 @@ export default function CpaPage() {
     },
     {
       title: 'Acciones',
+      key: 'acciones',
       width: 100,
       fixed: 'right' as const,
       render: (_: unknown, record: CpaRecord) => (
@@ -522,7 +713,7 @@ export default function CpaPage() {
         rowKey="id"
         loading={loading}
         size="small"
-        scroll={{ x: 1200 }}
+        scroll={{ x: 2600 }}
         pagination={{ pageSize: 20, showSizeChanger: true }}
         onChange={(_pagination, _filters, sorter) => {
           if (Array.isArray(sorter)) return;
@@ -584,14 +775,8 @@ export default function CpaPage() {
               <Form.Item name="fecha" label="Fecha">
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
-              <Form.Item name="producto" label="Producto" rules={[{ required: true }]}>
-                <AutoComplete
-                  options={uniqueProducts}
-                  placeholder="Nombre del producto"
-                  filterOption={(inputValue, option) =>
-                    option!.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-                  }
-                />
+              <Form.Item name="producto" label="Producto" rules={[{ required: true, whitespace: true }]}>
+                <Input placeholder="Escribe el nombre del producto" allowClear />
               </Form.Item>
               <Form.Item name="cuenta_publicitaria" label="Cuenta Publicitaria">
                 <Input placeholder="Nombre de la cuenta" />
@@ -611,25 +796,40 @@ export default function CpaPage() {
             </div>
             <div style={{ flex: 1 }}>
               <Form.Item name="ventas" label="Ventas">
-                <InputNumber style={{ width: '100%' }} />
+                <InputNumber style={{ width: '100%' }} min={0} precision={0} />
               </Form.Item>
-              <Form.Item name="ticket_promedio_producto" label="Ticket Promedio Producto">
-                <InputNumber style={{ width: '100%' }} formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} />
+              <Paragraph type="secondary" style={{ margin: '0 0 8px', fontSize: 12 }}>
+                Calculado al guardar (mismo criterio que el Excel modelo): ticket promedio, CPA, tasa de conversión, costo
+                publicitario, rentabilidad y utilidad aproximada.
+              </Paragraph>
+              <Form.Item label="Ticket promedio producto">
+                <Input readOnly value={fmtPreviewMoney(derivedPreview.ticket_promedio_producto)} />
               </Form.Item>
-              <Form.Item name="cpa" label="CPA">
-                <InputNumber style={{ width: '100%' }} formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} />
+              <Form.Item label="CPA">
+                <Input readOnly value={fmtPreviewMoney(derivedPreview.cpa)} />
               </Form.Item>
-              <Form.Item name="conversion_rate" label="Conversion Rate">
-                <InputNumber style={{ width: '100%' }} step={0.01} precision={4} />
+              <Form.Item label="Conversion rate (ventas / conversaciones)">
+                <Input readOnly value={fmtPreviewRatio(derivedPreview.conversion_rate)} />
               </Form.Item>
-              <Form.Item name="costo_publicitario" label="Costo Publicitario">
-                <InputNumber style={{ width: '100%' }} formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} />
+              <Form.Item label="Costo publicitario (= gasto publicidad)">
+                <Input readOnly value={fmtPreviewMoney(derivedPreview.costo_publicitario)} />
               </Form.Item>
-              <Form.Item name="rentabilidad" label="Rentabilidad">
-                <InputNumber style={{ width: '100%' }} step={0.1} precision={2} />
+              <Form.Item label="Rentabilidad (utilidad / gasto)">
+                <Input readOnly value={fmtPreviewRatio(derivedPreview.rentabilidad)} />
               </Form.Item>
-              <Form.Item name="utilidad_aproximada" label="Utilidad Aproximada">
-                <InputNumber style={{ width: '100%' }} formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} />
+              <Form.Item label="Utilidad aproximada ((ganancia prom. × ventas) − gasto)">
+                <Input
+                  readOnly
+                  value={fmtPreviewMoney(derivedPreview.utilidad_aproximada)}
+                  style={{
+                    color:
+                      derivedPreview.utilidad_aproximada != null &&
+                      derivedPreview.utilidad_aproximada >= 0
+                        ? '#52c41a'
+                        : '#ff4d4f',
+                    fontWeight: 600,
+                  }}
+                />
               </Form.Item>
             </div>
           </Space>
