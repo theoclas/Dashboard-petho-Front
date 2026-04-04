@@ -10,6 +10,7 @@ import {
   Space,
   Spin,
   Table,
+  Tooltip,
   Typography,
 } from 'antd';
 import { LineChartOutlined, TruckOutlined } from '@ant-design/icons';
@@ -68,11 +69,12 @@ const Y_TICKS = [100, 75, 50, 25, 0];
 /** Barras agrupadas sin canvas (evita fallos de @ant-design/charts/G2 en Brave y contenedores flex). */
 function ComparativaGeograficaBars(props: {
   ubicaciones: string[];
-  puntos: { ubicacion: string; transportadora: string; valorPct: number }[];
+  puntos: ComparativaGeograficaResponse['puntos'];
   colorDomain: string[];
   colorRange: string[];
+  metrica: 'efectividad' | 'devolucion';
 }) {
-  const { ubicaciones, puntos, colorDomain, colorRange } = props;
+  const { ubicaciones, puntos, colorDomain, colorRange, metrica } = props;
   const byLoc = useMemo(() => {
     const m = new Map<string, typeof puntos>();
     for (const u of ubicaciones) m.set(u, []);
@@ -139,18 +141,44 @@ function ComparativaGeograficaBars(props: {
                 {series.map((p) => {
                   const h = Math.max(2, (p.valorPct / 100) * CHART_INNER_H);
                   const bg = colorByCarrier(colorDomain, colorRange, p.transportadora);
+                  const ratioLine =
+                    p.numerador != null && p.denominador != null
+                      ? `${p.numerador} / ${p.denominador}`
+                      : null;
+                  const ratioHint =
+                    metrica === 'efectividad'
+                      ? 'entregados / enviados'
+                      : 'devoluciones / enviados';
                   return (
-                    <div
+                    <Tooltip
                       key={`${u}-${p.transportadora}`}
-                      title={`${p.transportadora}: ${p.valorPct}%`}
-                      style={{
-                        width: Math.min(14, Math.max(8, 40 / Math.max(1, series.length))),
-                        height: h,
-                        background: bg,
-                        borderRadius: 3,
-                        cursor: 'default',
-                      }}
-                    />
+                      mouseEnterDelay={0.1}
+                      title={
+                        <div style={{ lineHeight: 1.45, maxWidth: 220 }}>
+                          <div style={{ fontWeight: 600 }}>{p.transportadora}</div>
+                          <div>
+                            {p.valorPct}%{' '}
+                            {metrica === 'efectividad' ? 'efectividad' : 'devolución'}
+                          </div>
+                          {ratioLine && (
+                            <>
+                              <div style={{ marginTop: 4, fontSize: 13 }}>{ratioLine}</div>
+                              <div style={{ fontSize: 11, opacity: 0.85 }}>{ratioHint}</div>
+                            </>
+                          )}
+                        </div>
+                      }
+                    >
+                      <div
+                        style={{
+                          width: Math.min(14, Math.max(8, 40 / Math.max(1, series.length))),
+                          height: h,
+                          background: bg,
+                          borderRadius: 3,
+                          cursor: 'default',
+                        }}
+                      />
+                    </Tooltip>
                   );
                 })}
               </div>
@@ -452,6 +480,7 @@ export default function LogisticaTransportadorasPage() {
                   puntos={chartData}
                   colorDomain={colorScale.domain}
                   colorRange={colorScale.range}
+                  metrica={metrica}
                 />
                 <Flex wrap="wrap" gap="12px 20px" justify="center" style={{ marginTop: 20 }}>
                   {colorScale.domain.map((name, i) => (

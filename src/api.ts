@@ -175,6 +175,8 @@ export type ComparativaGeograficaPunto = {
   ubicacion: string;
   transportadora: string;
   valorPct: number;
+  numerador: number;
+  denominador: number;
 };
 
 export type ComparativaGeograficaResponse = {

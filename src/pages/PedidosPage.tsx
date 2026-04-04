@@ -71,6 +71,7 @@ const estadoColors: Record<string, string> = {
 
 /** Filtros por columna (servidor); `fecha` → query `fecha_contains`. */
 const PEDIDO_COLUMN_FILTER_KEYS = [
+  'id',
   'id_dropi',
   'estado_unificado',
   'transportadora',
@@ -95,6 +96,7 @@ const PEDIDO_COLUMN_FILTER_KEYS = [
 type PedidoColumnFilterKey = (typeof PEDIDO_COLUMN_FILTER_KEYS)[number];
 
 const initialColumnFilters: Record<PedidoColumnFilterKey, string> = {
+  id: '',
   id_dropi: '',
   estado_unificado: '',
   transportadora: '',
@@ -327,8 +329,18 @@ export default function PedidosPage() {
 
   const columns: ColumnsType<Pedido> = [
     {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 72,
+      fixed: 'left',
+      sorter: true,
+      ...getColumnSearchProps('ID', 'id'),
+    },
+    {
       title: 'ID Dropi',
       dataIndex: 'id_dropi',
+      key: 'id_dropi',
       width: 100,
       fixed: 'left',
       sorter: true,
@@ -645,7 +657,7 @@ export default function PedidosPage() {
           selectedRowKeys.length > 0 ? (
             <Table.Summary fixed>
               <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={9}>
+                <Table.Summary.Cell index={0} colSpan={10}>
                   <Text strong>
                     Total ({selectedRowKeys.length} fila{selectedRowKeys.length !== 1 ? 's' : ''} seleccionada
                     {selectedRowKeys.length !== 1 ? 's' : ''})

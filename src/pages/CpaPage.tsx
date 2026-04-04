@@ -12,11 +12,11 @@ import {
   InputNumber,
   DatePicker,
   Upload,
-  Select,
   Progress,
   Tooltip,
 } from 'antd';
-import type { TableProps } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import type { FilterDropdownProps } from 'antd/es/table/interface';
 import type { AxiosError } from 'axios';
 import {
   PlusOutlined,
@@ -24,6 +24,8 @@ import {
   DeleteOutlined,
   UploadOutlined,
   DownloadOutlined,
+  SearchOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import {
   getCpas,
@@ -31,15 +33,54 @@ import {
   updateCpa,
   deleteCpa,
   importFile,
-  getCpaDistinctProductos,
   wipeCpaTable,
   exportCpaExcel,
 } from '../api';
 import { useAuth } from '../contexts/AuthContext';
-import dayjs, { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 
 const { Title, Paragraph, Text } = Typography;
 const { RangePicker } = DatePicker;
+
+const CPA_COLUMN_FILTER_KEYS = [
+  'id',
+  'semana',
+  'fecha',
+  'producto',
+  'cuenta_publicitaria',
+  'gasto_publicidad',
+  'conversaciones',
+  'total_facturado',
+  'ganancia_promedio',
+  'ventas',
+  'ticket_promedio_producto',
+  'cpa',
+  'conversion_rate',
+  'costo_publicitario',
+  'rentabilidad',
+  'utilidad_aproximada',
+] as const;
+
+type CpaColumnFilterKey = (typeof CPA_COLUMN_FILTER_KEYS)[number];
+
+const initialCpaColumnFilters: Record<CpaColumnFilterKey, string> = {
+  id: '',
+  semana: '',
+  fecha: '',
+  producto: '',
+  cuenta_publicitaria: '',
+  gasto_publicidad: '',
+  conversaciones: '',
+  total_facturado: '',
+  ganancia_promedio: '',
+  ventas: '',
+  ticket_promedio_producto: '',
+  cpa: '',
+  conversion_rate: '',
+  costo_publicitario: '',
+  rentabilidad: '',
+  utilidad_aproximada: '',
+};
 
 /** Celda sin dato en BD (null/undefined); distinto de 0, que es un valor real. */
 const CPA_EMPTY = '—';
@@ -208,8 +249,11 @@ export default function CpaPage() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CpaRecord | null>(null);
-  const [cpaProductos, setCpaProductos] = useState<string[]>([]);
-  const [productoFilter, setProductoFilter] = useState('');
+  const [filters, setFilters] = useState({
+    ...initialCpaColumnFilters,
+    startDate: '',
+    endDate: '',
+  });
   const [sortField, setSortField] = useState<string>('fecha');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
   const [form] = Form.useForm();
@@ -219,18 +263,22 @@ export default function CpaPage() {
   const [errorsModalOpen, setErrorsModalOpen] = useState(false);
   const [wipePassword, setWipePassword] = useState('');
   const [wipeLoading, setWipeLoading] = useState(false);
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null]);
   const [exporting, setExporting] = useState(false);
 
   const buildListParams = useCallback((): Record<string, unknown> => {
     const params: Record<string, unknown> = { sortField, sortOrder };
-    if (productoFilter.trim()) params.producto = productoFilter.trim();
-    if (dateRange[0] && dateRange[1]) {
-      params.startDate = dateRange[0].format('YYYY-MM-DD');
-      params.endDate = dateRange[1].format('YYYY-MM-DD');
+    for (const k of CPA_COLUMN_FILTER_KEYS) {
+      const v = filters[k]?.trim();
+      if (!v) continue;
+      if (k === 'fecha') params.fecha_contains = v;
+      else params[k] = v;
+    }
+    if (filters.startDate && filters.endDate) {
+      params.startDate = filters.startDate;
+      params.endDate = filters.endDate;
     }
     return params;
-  }, [productoFilter, sortField, sortOrder, dateRange]);
+  }, [filters, sortField, sortOrder]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -259,8 +307,8 @@ export default function CpaPage() {
       const a = document.createElement('a');
       a.href = url;
       const nameSuffix =
-        dateRange[0] && dateRange[1]
-          ? `${dateRange[0].format('YYYY-MM-DD')}_a_${dateRange[1].format('YYYY-MM-DD')}`
+        filters.startDate && filters.endDate
+          ? `${filters.startDate}_a_${filters.endDate}`
           : dayjs().format('YYYY-MM-DD_HHmm');
       a.download = `cpa_${nameSuffix}.xlsx`;
       document.body.appendChild(a);
@@ -281,22 +329,9 @@ export default function CpaPage() {
     }
   };
 
-  const fetchCpaProductos = async () => {
-    try {
-      const list = await getCpaDistinctProductos();
-      if (Array.isArray(list)) setCpaProductos(list);
-    } catch {
-      /* ignore */
-    }
-  };
-
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    fetchCpaProductos();
-  }, []);
 
   const gastoW = Form.useWatch('gasto_publicidad', form);
   const ventasW = Form.useWatch('ventas', form);
@@ -342,7 +377,6 @@ export default function CpaPage() {
       await deleteCpa(id);
       message.success('Registro eliminado');
       await fetchData();
-      await fetchCpaProductos();
     } catch {
       message.error('Error eliminando registro');
     }
@@ -372,7 +406,6 @@ export default function CpaPage() {
       }
       setModalOpen(false);
       await fetchData();
-      await fetchCpaProductos();
     } catch {
       /* validation error */
     }
@@ -381,17 +414,62 @@ export default function CpaPage() {
   const sortOrderFor = (field: string) =>
     sortField === field ? (sortOrder === 'ASC' ? ('ascend' as const) : ('descend' as const)) : undefined;
 
+  const getColumnSearchProps = (title: string, filterKey: CpaColumnFilterKey) => ({
+    filterDropdown: ({
+      setSelectedKeys,
+      selectedKeys,
+      confirm,
+      clearFilters,
+    }: FilterDropdownProps) => (
+      <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
+        <Input
+          placeholder={`Buscar ${title}`}
+          value={String(selectedKeys[0] ?? '')}
+          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onPressEnter={() => confirm()}
+          style={{ marginBottom: 8, display: 'block' }}
+        />
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => confirm()}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Buscar
+          </Button>
+          <Button
+            onClick={() => {
+              clearFilters?.();
+              confirm();
+            }}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Limpiar
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: (filtered: boolean) => (
+      <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+    ),
+    filteredValue: filters[filterKey] ? [filters[filterKey]] : null,
+  });
+
   /** Mismo orden que la exportación Excel del API (hoja CPA). */
-  const columns: TableProps<CpaRecord>['columns'] = [
+  const columns: ColumnsType<CpaRecord> = [
     {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 72,
-      fixed: 'left' as const,
+      fixed: 'left',
       sorter: true,
       sortOrder: sortOrderFor('id'),
       align: 'right',
+      ...getColumnSearchProps('ID', 'id'),
     },
     {
       title: 'Semana',
@@ -401,6 +479,7 @@ export default function CpaPage() {
       ellipsis: true,
       sorter: true,
       sortOrder: sortOrderFor('semana'),
+      ...getColumnSearchProps('Semana', 'semana'),
     },
     {
       title: 'Fecha',
@@ -409,6 +488,7 @@ export default function CpaPage() {
       width: 108,
       sorter: true,
       sortOrder: sortOrderFor('fecha'),
+      ...getColumnSearchProps('fecha (texto)', 'fecha'),
       render: (v: string) => (v ? dayjs(v).format('DD/MM/YYYY') : '—'),
     },
     {
@@ -419,6 +499,7 @@ export default function CpaPage() {
       ellipsis: true,
       sorter: true,
       sortOrder: sortOrderFor('producto'),
+      ...getColumnSearchProps('Producto', 'producto'),
     },
     {
       title: 'Cuenta publicitaria',
@@ -428,6 +509,7 @@ export default function CpaPage() {
       ellipsis: true,
       sorter: true,
       sortOrder: sortOrderFor('cuenta_publicitaria'),
+      ...getColumnSearchProps('Cuenta publicitaria', 'cuenta_publicitaria'),
     },
     {
       title: 'Gasto publicidad',
@@ -437,6 +519,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('gasto_publicidad'),
       align: 'right',
+      ...getColumnSearchProps('Gasto publicidad', 'gasto_publicidad'),
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
@@ -447,6 +530,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('conversaciones'),
       align: 'right',
+      ...getColumnSearchProps('Conversaciones', 'conversaciones'),
       render: (v: unknown, record: CpaRecord) => fmtCpaIntCell(v, record),
     },
     {
@@ -457,6 +541,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('total_facturado'),
       align: 'right',
+      ...getColumnSearchProps('Total facturado', 'total_facturado'),
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
@@ -467,6 +552,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('ganancia_promedio'),
       align: 'right',
+      ...getColumnSearchProps('Ganancia promedio', 'ganancia_promedio'),
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
@@ -477,6 +563,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('ventas'),
       align: 'right',
+      ...getColumnSearchProps('Ventas', 'ventas'),
       render: (v: unknown, record: CpaRecord) => fmtCpaIntCell(v, record),
     },
     {
@@ -487,6 +574,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('ticket_promedio_producto'),
       align: 'right',
+      ...getColumnSearchProps('Ticket prom. producto', 'ticket_promedio_producto'),
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
@@ -497,6 +585,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('cpa'),
       align: 'right',
+      ...getColumnSearchProps('CPA', 'cpa'),
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
@@ -507,6 +596,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('conversion_rate'),
       align: 'right',
+      ...getColumnSearchProps('Conversion rate', 'conversion_rate'),
       render: (v: unknown, record: CpaRecord) => fmtCpaDecimalCell(v, record, 4),
     },
     {
@@ -517,6 +607,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('costo_publicitario'),
       align: 'right',
+      ...getColumnSearchProps('Costo publicitario', 'costo_publicitario'),
       render: (v: unknown, record: CpaRecord) => fmtCpaMoneyCell(v, record),
     },
     {
@@ -527,6 +618,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('rentabilidad'),
       align: 'right',
+      ...getColumnSearchProps('Rentabilidad', 'rentabilidad'),
       render: (v: unknown, record: CpaRecord) => fmtCpaDecimalCell(v, record, 4),
     },
     {
@@ -537,6 +629,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('utilidad_aproximada'),
       align: 'right',
+      ...getColumnSearchProps('Utilidad aproximada', 'utilidad_aproximada'),
       render: (v: unknown, record: CpaRecord) => {
         if (isCpaValueAbsent(v)) return <span>{CPA_EMPTY}</span>;
         const n = Number(v);
@@ -578,7 +671,6 @@ export default function CpaPage() {
         message.warning(`${result.errors.length} fila(s) con avisos; abra el detalle si lo necesita.`);
       }
       await fetchData();
-      await fetchCpaProductos();
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { message?: string } }; message?: string };
       message.error(ax.response?.data?.message ?? ax.message ?? 'Error al importar');
@@ -618,7 +710,6 @@ export default function CpaPage() {
           message.success(`Eliminados ${res.deleted} registro(s) de CPA.`);
           setWipePassword('');
           await fetchData();
-          await fetchCpaProductos();
         } catch (e: unknown) {
           message.error(wipeErrMsg(e));
           throw e;
@@ -637,27 +728,24 @@ export default function CpaPage() {
           <RangePicker
             placeholder={['Desde', 'Hasta']}
             format="DD/MM/YYYY"
-            value={dateRange[0] && dateRange[1] ? [dateRange[0], dateRange[1]] : null}
+            value={
+              filters.startDate && filters.endDate
+                ? [dayjs(filters.startDate), dayjs(filters.endDate)]
+                : null
+            }
             onChange={(dates) => {
               const d0 = dates?.[0];
               const d1 = dates?.[1];
-              if (!d0 || !d1) setDateRange([null, null]);
-              else setDateRange([d0, d1]);
+              if (!d0 || !d1) {
+                setFilters((f) => ({ ...f, startDate: '', endDate: '' }));
+              } else {
+                setFilters((f) => ({
+                  ...f,
+                  startDate: d0.format('YYYY-MM-DD'),
+                  endDate: d1.format('YYYY-MM-DD'),
+                }));
+              }
             }}
-          />
-          <Select
-            showSearch
-            allowClear
-            placeholder="Filtrar por producto"
-            style={{ minWidth: 260 }}
-            value={productoFilter || undefined}
-            onChange={(v) => setProductoFilter(v ?? '')}
-            options={cpaProductos.map((p) => ({ label: p, value: p }))}
-            filterOption={(input, opt) =>
-              String(opt?.label ?? '')
-                .toLowerCase()
-                .includes(input.toLowerCase())
-            }
           />
           <Space direction="vertical" size={4} style={{ minWidth: 200 }}>
             <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={handleUpload} disabled={importing}>
@@ -680,6 +768,10 @@ export default function CpaPage() {
           >
             Exportar Excel
           </Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchData}>
+            Recargar
+          </Button>
+          <Text type="secondary">{data.length.toLocaleString()} resultados</Text>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             Nuevo Registro
           </Button>
@@ -715,16 +807,32 @@ export default function CpaPage() {
         size="small"
         scroll={{ x: 2600 }}
         pagination={{ pageSize: 20, showSizeChanger: true }}
-        onChange={(_pagination, _filters, sorter) => {
-          if (Array.isArray(sorter)) return;
-          const colKey = (sorter.columnKey ?? sorter.field) as string | undefined;
-          if (colKey && sorter.order) {
-            setSortField(colKey);
-            setSortOrder(sorter.order === 'ascend' ? 'ASC' : 'DESC');
+        onChange={(_pagination, tableFilters, sorter) => {
+          const ord = Array.isArray(sorter) ? sorter[0] : sorter;
+          const fieldRaw = ord && typeof ord === 'object' ? ord.field : undefined;
+          const sortCol =
+            fieldRaw == null
+              ? undefined
+              : Array.isArray(fieldRaw)
+                ? String(fieldRaw[0])
+                : String(fieldRaw);
+          const order = ord && typeof ord === 'object' ? ord.order : undefined;
+          if (sortCol && order) {
+            setSortField(sortCol);
+            setSortOrder(order === 'ascend' ? 'ASC' : 'DESC');
           } else {
             setSortField('fecha');
             setSortOrder('DESC');
           }
+          setFilters((prev) => {
+            const next = { ...prev };
+            for (const k of CPA_COLUMN_FILTER_KEYS) {
+              const fv = tableFilters?.[k];
+              const first = Array.isArray(fv) ? fv[0] : undefined;
+              next[k] = first != null && first !== '' ? String(first) : '';
+            }
+            return next;
+          });
         }}
       />
 
