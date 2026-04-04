@@ -21,6 +21,8 @@ export default function MapeoEstadosPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MapeoEstado | null>(null);
   const [form] = Form.useForm();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const fetchData = async () => {
     setLoading(true);
@@ -36,6 +38,11 @@ export default function MapeoEstadosPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(data.length / pageSize) || 1);
+    if (page > totalPages) setPage(totalPages);
+  }, [data.length, pageSize, page]);
 
   const handleAdd = () => {
     setEditingRecord(null);
@@ -147,7 +154,21 @@ export default function MapeoEstadosPage() {
         rowKey="id"
         loading={loading}
         size="small"
-        pagination={{ pageSize: 50 }}
+        scroll={{ x: 'max-content' }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data.length,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50, 100, 200, 800],
+          showTotal: (t) => `Total: ${t.toLocaleString()}`,
+        }}
+        onChange={(pagination, _filters, _sorter, extra) => {
+          if (extra?.action === 'paginate') {
+            setPage(pagination.current ?? 1);
+            setPageSize(pagination.pageSize ?? 50);
+          }
+        }}
       />
 
       <Modal

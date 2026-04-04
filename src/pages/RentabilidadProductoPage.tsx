@@ -70,7 +70,7 @@ export default function RentabilidadProductoPage() {
   const [rows, setRows] = useState<RentabilidadProductoRow[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit, setLimit] = useState(20);
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -89,7 +89,7 @@ export default function RentabilidadProductoPage() {
 
   useLayoutEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, rangeKey, sortBy, sortOrder]);
+  }, [debouncedSearch, rangeKey, sortBy, sortOrder, limit]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -134,9 +134,12 @@ export default function RentabilidadProductoPage() {
     pagination: TablePaginationConfig,
     _filters: unknown,
     sorter: SorterResult<RentabilidadProductoRow> | SorterResult<RentabilidadProductoRow>[],
+    extra?: { action?: string },
   ) => {
-    if (pagination.current && pagination.current !== currentPage) {
-      setCurrentPage(pagination.current);
+    if (extra?.action === 'paginate') {
+      setCurrentPage(pagination.current ?? 1);
+      if (pagination.pageSize != null) setLimit(pagination.pageSize);
+      return;
     }
     if (!Array.isArray(sorter) && sorter.columnKey && sorter.order) {
       setSortBy(String(sorter.columnKey) as RentabilidadSortBy);
@@ -314,7 +317,9 @@ export default function RentabilidadProductoPage() {
               current: currentPage,
               pageSize: limit,
               total,
-              showSizeChanger: false,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100, 200, 800],
+              showTotal: (t) => `Total: ${t.toLocaleString()}`,
             }}
             onChange={handleTableChange}
             size="middle"

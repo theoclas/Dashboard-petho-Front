@@ -264,6 +264,8 @@ export default function CpaPage() {
   const [wipePassword, setWipePassword] = useState('');
   const [wipeLoading, setWipeLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [cpaPage, setCpaPage] = useState(1);
+  const [cpaPageSize, setCpaPageSize] = useState(20);
 
   const buildListParams = useCallback((): Record<string, unknown> => {
     const params: Record<string, unknown> = { sortField, sortOrder };
@@ -332,6 +334,11 @@ export default function CpaPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(data.length / cpaPageSize) || 1);
+    if (cpaPage > totalPages) setCpaPage(totalPages);
+  }, [data.length, cpaPageSize, cpaPage]);
 
   const gastoW = Form.useWatch('gasto_publicidad', form);
   const ventasW = Form.useWatch('ventas', form);
@@ -736,6 +743,7 @@ export default function CpaPage() {
             onChange={(dates) => {
               const d0 = dates?.[0];
               const d1 = dates?.[1];
+              setCpaPage(1);
               if (!d0 || !d1) {
                 setFilters((f) => ({ ...f, startDate: '', endDate: '' }));
               } else {
@@ -806,8 +814,21 @@ export default function CpaPage() {
         loading={loading}
         size="small"
         scroll={{ x: 2600 }}
-        pagination={{ pageSize: 20, showSizeChanger: true }}
-        onChange={(_pagination, tableFilters, sorter) => {
+        pagination={{
+          current: cpaPage,
+          pageSize: cpaPageSize,
+          total: data.length,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50, 100, 200, 800],
+          showTotal: (t) => `Total: ${t.toLocaleString()}`,
+        }}
+        onChange={(pagination, tableFilters, sorter, extra) => {
+          if (extra?.action === 'paginate') {
+            setCpaPage(pagination.current ?? 1);
+            setCpaPageSize(pagination.pageSize ?? 20);
+            return;
+          }
+          setCpaPage(1);
           const ord = Array.isArray(sorter) ? sorter[0] : sorter;
           const fieldRaw = ord && typeof ord === 'object' ? ord.field : undefined;
           const sortCol =

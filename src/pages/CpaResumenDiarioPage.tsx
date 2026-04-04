@@ -68,6 +68,9 @@ const TIPO_LABEL: Record<string, string> = {
   producto: 'Producto',
 };
 
+/** Valor interno del Select para “sin filtro de producto” (no coincide con nombres reales). */
+const PRODUCTO_TODOS = '__ALL_PRODUCTOS__';
+
 function colTitle(label: string, tip: string) {
   return (
     <span>
@@ -84,7 +87,7 @@ export default function CpaResumenDiarioPage() {
     dayjs().startOf('month'),
     dayjs().endOf('month'),
   ]);
-  const [producto, setProducto] = useState<string | undefined>(undefined);
+  const [producto, setProducto] = useState<string>(PRODUCTO_TODOS);
   const [productos, setProductos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<CpaResumenDiarioResponse | null>(null);
@@ -107,7 +110,10 @@ export default function CpaResumenDiarioPage() {
       const res = await getCpaResumenDiario({
         startDate: dateRange[0].format('YYYY-MM-DD'),
         endDate: dateRange[1].format('YYYY-MM-DD'),
-        producto: producto?.trim() || undefined,
+        producto:
+          producto === PRODUCTO_TODOS || !producto.trim()
+            ? undefined
+            : producto.trim(),
       });
       setData(res);
     } catch {
@@ -223,10 +229,13 @@ export default function CpaResumenDiarioPage() {
             showSearch
             allowClear
             placeholder="Filtrar por producto"
-            style={{ minWidth: 240 }}
+            style={{ minWidth: 260 }}
             value={producto}
-            onChange={(v) => setProducto(v)}
-            options={productos.map((p) => ({ label: p, value: p }))}
+            onChange={(v) => setProducto(v ?? PRODUCTO_TODOS)}
+            options={[
+              { label: 'Todos los productos', value: PRODUCTO_TODOS },
+              ...productos.map((p) => ({ label: p, value: p })),
+            ]}
             filterOption={(input, opt) =>
               String(opt?.label ?? '')
                 .toLowerCase()
