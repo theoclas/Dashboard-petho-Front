@@ -735,6 +735,7 @@ export default function CpaPage() {
           <RangePicker
             placeholder={['Desde', 'Hasta']}
             format="DD/MM/YYYY"
+            inputReadOnly
             value={
               filters.startDate && filters.endDate
                 ? [dayjs(filters.startDate), dayjs(filters.endDate)]
@@ -786,11 +787,14 @@ export default function CpaPage() {
           {user?.role === 'ADMIN' && (
             <>
               <Input.Password
+                id="cpa-import-wipe-secret"
+                name="cpa-import-wipe-secret"
                 placeholder="Contraseña IMPORT_WIPE_SECRET"
                 value={wipePassword}
                 onChange={(e) => setWipePassword(e.target.value)}
                 style={{ width: 200 }}
                 disabled={wipeLoading}
+                autoComplete="new-password"
               />
               <Tooltip title="Elimina todos los registros CPA; requiere la misma clave del .env del servidor.">
                 <Button
