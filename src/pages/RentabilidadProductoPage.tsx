@@ -259,7 +259,10 @@ export default function RentabilidadProductoPage() {
           <AppstoreOutlined style={{ marginRight: 8 }} />
           Rentabilidad por producto
         </Title>
-        <Text type="secondary">Filtrado y ordenación vía API; pauta enlazada a CPA.</Text>
+        <Text type="secondary">
+          Listado según productos en CPA en el período; logística y ventas desde pedidos (nombre CPA contenido en
+          nombre Dropi o igualdad). Pauta desde CPA.
+        </Text>
       </div>
 
       <Card size="small" style={cardSurface} styles={{ body: { padding: '12px 16px' } }}>
