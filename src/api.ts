@@ -250,8 +250,9 @@ export const importFile = (
 ) => {
   const formData = new FormData();
   formData.append('file', file);
-  return api.post(`/import/${endpoint}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  // No fijar Content-Type: el navegador debe enviar multipart/form-data con boundary.
+  // Barra final evita 307 del proxy (Apache/Hostinger) que rompe CORS en POST multipart.
+  return api.post(`/import/${endpoint}/`, formData, {
     timeout: 1800000, // 30 minutos de timeout
     onUploadProgress: (e) => {
       if (onProgress && e.total) {

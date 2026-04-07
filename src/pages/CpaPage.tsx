@@ -38,6 +38,11 @@ import {
 } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import dayjs from 'dayjs';
+import {
+  fmtCalendarDateDdMmYyyy,
+  dayjsFromIsoDateForPicker,
+  dayjsFromYmdFilterString,
+} from '../utils/calendarDateLocal';
 
 const { Title, Paragraph, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -367,7 +372,7 @@ export default function CpaPage() {
     setEditingRecord(record);
     form.setFieldsValue({
       semana: record.semana,
-      fecha: record.fecha ? dayjs(record.fecha) : null,
+      fecha: dayjsFromIsoDateForPicker(record.fecha),
       producto: record.producto,
       cuenta_publicitaria: record.cuenta_publicitaria,
       gasto_publicidad: record.gasto_publicidad,
@@ -394,7 +399,7 @@ export default function CpaPage() {
       const values = await form.validateFields();
       const payload = {
         semana: values.semana,
-        fecha: values.fecha ? values.fecha.toISOString() : null,
+        fecha: values.fecha ? values.fecha.format('YYYY-MM-DD') : null,
         producto: values.producto,
         cuenta_publicitaria: values.cuenta_publicitaria,
         gasto_publicidad: values.gasto_publicidad,
@@ -496,7 +501,7 @@ export default function CpaPage() {
       sorter: true,
       sortOrder: sortOrderFor('fecha'),
       ...getColumnSearchProps('fecha (texto)', 'fecha'),
-      render: (v: string) => (v ? dayjs(v).format('DD/MM/YYYY') : '—'),
+      render: (v: string) => fmtCalendarDateDdMmYyyy(v),
     },
     {
       title: 'Producto',
@@ -738,7 +743,7 @@ export default function CpaPage() {
             inputReadOnly
             value={
               filters.startDate && filters.endDate
-                ? [dayjs(filters.startDate), dayjs(filters.endDate)]
+                ? [dayjsFromYmdFilterString(filters.startDate), dayjsFromYmdFilterString(filters.endDate)]
                 : null
             }
             onChange={(dates) => {

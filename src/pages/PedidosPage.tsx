@@ -12,6 +12,7 @@ import type { FilterDropdownProps } from 'antd/es/table/interface';
 import { getPedidos, updatePedido, getProductosDetalle, remapearEstados, exportPedidosExcel } from '../api';
 import dayjs from 'dayjs';
 import { useAuth } from '../contexts/AuthContext';
+import { fmtCalendarDateDdMmYyyy, dayjsFromYmdFilterString } from '../utils/calendarDateLocal';
 
 const { Title, Text } = Typography;
 
@@ -352,7 +353,7 @@ export default function PedidosPage() {
       width: 100,
       sorter: true,
       ...getColumnSearchProps('fecha (texto)', 'fecha'),
-      render: (v: string) => (v ? dayjs(v).format('DD/MM/YYYY') : '-'),
+      render: (v: string) => fmtCalendarDateDdMmYyyy(v, '-'),
     },
     {
       title: 'Cliente',
@@ -589,7 +590,7 @@ export default function PedidosPage() {
             format="DD/MM/YYYY"
             value={
               filters.startDate && filters.endDate
-                ? [dayjs(filters.startDate), dayjs(filters.endDate)]
+                ? [dayjsFromYmdFilterString(filters.startDate), dayjsFromYmdFilterString(filters.endDate)]
                 : null
             }
             onChange={(dates) => {
