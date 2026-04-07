@@ -13,9 +13,10 @@ import {
   Switch,
   Space,
 } from 'antd';
-import { ReloadOutlined, UserAddOutlined } from '@ant-design/icons';
+import { ReloadOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import api from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -30,6 +31,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -58,6 +60,18 @@ export default function UsersPage() {
       fetchUsers();
     } catch {
       message.error('Error al actualizar usuario');
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    try {
+      await api.delete(`/users/${id}`);
+      message.success('Usuario eliminado');
+      fetchUsers();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string | string[] } } };
+      const msg = e.response?.data?.message;
+      message.error(Array.isArray(msg) ? String(msg[0]) : msg || 'Error al eliminar usuario');
     }
   };
 
@@ -135,23 +149,53 @@ export default function UsersPage() {
     },
     {
       title: 'Acciones',
-      width: 150,
-      render: (_, record: User) => (
-        <Popconfirm
-          title={`¿${record.is_active ? 'Desactivar' : 'Activar'} este usuario?`}
-          onConfirm={() => handleUpdateUser(record.id, { is_active: !record.is_active })}
-          okText="Sí"
-          cancelText="No"
-        >
-          <Button
-            size="small"
-            danger={record.is_active}
-            type={record.is_active ? 'default' : 'primary'}
-          >
-            {record.is_active ? 'Desactivar' : 'Activar'}
-          </Button>
-        </Popconfirm>
-      ),
+      width: 220,
+      render: (_, record: User) => {
+        const isSelf = currentUser?.id === record.id;
+        const adminCount = users.filter((u) => u.role === 'ADMIN').length;
+        const disableDelete = isSelf || (record.role === 'ADMIN' && adminCount <= 1);
+        const deleteTitle = isSelf
+          ? 'No puedes eliminar tu propio usuario'
+          : record.role === 'ADMIN' && adminCount <= 1
+            ? 'Debe existir al menos un administrador'
+            : undefined;
+        return (
+          <Space size="small" wrap>
+            <Popconfirm
+              title={`¿${record.is_active ? 'Desactivar' : 'Activar'} este usuario?`}
+              onConfirm={() => handleUpdateUser(record.id, { is_active: !record.is_active })}
+              okText="Sí"
+              cancelText="No"
+            >
+              <Button
+                size="small"
+                danger={record.is_active}
+                type={record.is_active ? 'default' : 'primary'}
+              >
+                {record.is_active ? 'Desactivar' : 'Activar'}
+              </Button>
+            </Popconfirm>
+            {disableDelete ? (
+              <Button size="small" danger type="default" icon={<DeleteOutlined />} disabled title={deleteTitle}>
+                Eliminar
+              </Button>
+            ) : (
+              <Popconfirm
+                title="¿Eliminar este usuario?"
+                description="No podrá iniciar sesión. Los datos quedan marcados como eliminados en el sistema."
+                onConfirm={() => handleDeleteUser(record.id)}
+                okText="Eliminar"
+                okButtonProps={{ danger: true }}
+                cancelText="Cancelar"
+              >
+                <Button size="small" danger type="default" icon={<DeleteOutlined />}>
+                  Eliminar
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
