@@ -360,18 +360,22 @@ export default function LogisticaTransportadorasPage() {
     },
     {
       title: 'CANCELADOS',
-      dataIndex: 'cancelados',
       key: 'cancelados',
-      sorter: (a, b) => a.cancelados - b.cancelados,
-      onHeaderCell: () => ({ style: { textAlign: 'right' } }),
-      onCell: () => ({ style: { textAlign: 'right', color: 'rgba(255,255,255,0.65)' } }),
-    },
-    {
-      title: 'RECHAZADOS',
-      dataIndex: 'rechazados',
-      key: 'rechazados',
-      sorter: (a, b) => a.rechazados - b.rechazados,
-      render: (v: number) => <Text style={{ color: '#EC4899' }}>{v}</Text>,
+      sorter: (a, b) => a.cancelados + a.rechazados - (b.cancelados + b.rechazados),
+      render: (_, r) => {
+        const total = r.cancelados + r.rechazados;
+        const hint =
+          r.rechazados > 0
+            ? `Cancelados: ${r.cancelados.toLocaleString('es-CO')} · Rechazados: ${r.rechazados.toLocaleString('es-CO')}`
+            : `Cancelados: ${r.cancelados.toLocaleString('es-CO')}`;
+        return (
+          <Tooltip title={hint}>
+            <Text style={{ color: 'rgba(255,255,255,0.65)', cursor: 'default' }}>
+              {total.toLocaleString('es-CO')}
+            </Text>
+          </Tooltip>
+        );
+      },
       onHeaderCell: () => ({ style: { textAlign: 'right' } }),
       onCell: () => ({ style: { textAlign: 'right' } }),
     },
@@ -484,16 +488,21 @@ export default function LogisticaTransportadorasPage() {
                       </Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={4} align="right">
-                      <Text strong style={{ color: 'rgba(255,255,255,0.85)' }}>
-                        {efectividadTotales.cancelados.toLocaleString('es-CO')}
-                      </Text>
+                      <Tooltip
+                        title={
+                          efectividadTotales.rechazados > 0
+                            ? `Cancelados: ${efectividadTotales.cancelados.toLocaleString('es-CO')} · Rechazados: ${efectividadTotales.rechazados.toLocaleString('es-CO')}`
+                            : `Cancelados: ${efectividadTotales.cancelados.toLocaleString('es-CO')}`
+                        }
+                      >
+                        <Text strong style={{ color: 'rgba(255,255,255,0.85)', cursor: 'default' }}>
+                          {(efectividadTotales.cancelados + efectividadTotales.rechazados).toLocaleString(
+                            'es-CO',
+                          )}
+                        </Text>
+                      </Tooltip>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={5} align="right">
-                      <Text strong style={{ color: '#EC4899' }}>
-                        {efectividadTotales.rechazados.toLocaleString('es-CO')}
-                      </Text>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={6} align="right">
                       <div
                         style={{
                           background: 'rgba(16, 185, 129, 0.12)',
