@@ -272,6 +272,37 @@ export default function LogisticaTransportadorasPage() {
     return rows.filter((r) => r.empresa.toLowerCase().includes(q));
   }, [rows, empresaFilter]);
 
+  /** Suma todas las transportadoras del rango (misma base que el dashboard); no aplica el filtro de búsqueda. */
+  const efectividadTotales = useMemo(() => {
+    if (rows.length === 0) return null;
+    let enviados = 0;
+    let transito = 0;
+    let devoluciones = 0;
+    let cancelados = 0;
+    let rechazados = 0;
+    let entregados = 0;
+    for (const r of rows) {
+      enviados += r.enviados;
+      transito += r.transito;
+      devoluciones += r.devoluciones;
+      cancelados += r.cancelados;
+      rechazados += r.rechazados;
+      entregados += r.entregados;
+    }
+    const den = enviados > 0 ? enviados : 1;
+    return {
+      enviados,
+      transito,
+      pctTransito: (transito / den) * 100,
+      devoluciones,
+      pctDevoluciones: (devoluciones / den) * 100,
+      cancelados,
+      rechazados,
+      entregados,
+      pctEntregados: (entregados / den) * 100,
+    };
+  }, [rows]);
+
   const chartData = comparativa?.puntos ?? [];
   const carriers = useMemo(
     () => [...new Set(chartData.map((p) => p.transportadora))],
@@ -418,6 +449,64 @@ export default function LogisticaTransportadorasPage() {
             showSorterTooltip
             scroll={{ x: 'max-content' }}
             locale={{ emptyText: <Empty description="Sin datos" /> }}
+            summary={() =>
+              efectividadTotales ? (
+                <Table.Summary fixed="bottom">
+                  <Table.Summary.Row style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <Table.Summary.Cell index={0} align="left">
+                      <div>
+                        <Text strong>TOTAL</Text>
+                        {empresaFilter.trim() ? (
+                          <Text
+                            type="secondary"
+                            style={{ display: 'block', fontSize: 11, fontWeight: 400, marginTop: 2 }}
+                          >
+                            Todas las empresas del rango (el filtro solo oculta filas)
+                          </Text>
+                        ) : null}
+                      </div>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} align="right">
+                      <Text strong style={{ color: 'rgba(255,255,255,0.85)' }}>
+                        {efectividadTotales.enviados.toLocaleString('es-CO')}
+                      </Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={2} align="right">
+                      <Text strong style={{ color: '#3B82F6' }}>
+                        {efectividadTotales.transito.toLocaleString('es-CO')} (
+                        {efectividadTotales.pctTransito.toFixed(1)}%)
+                      </Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={3} align="right">
+                      <Text strong style={{ color: '#EF4444' }}>
+                        {efectividadTotales.devoluciones.toLocaleString('es-CO')} (
+                        {efectividadTotales.pctDevoluciones.toFixed(1)}%)
+                      </Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} align="right">
+                      <Text strong style={{ color: 'rgba(255,255,255,0.85)' }}>
+                        {efectividadTotales.cancelados.toLocaleString('es-CO')}
+                      </Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={5} align="right">
+                      <Text strong style={{ color: '#EC4899' }}>
+                        {efectividadTotales.rechazados.toLocaleString('es-CO')}
+                      </Text>
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell
+                      index={6}
+                      align="right"
+                      style={{ background: 'rgba(16, 185, 129, 0.12)' }}
+                    >
+                      <Text strong style={{ color: '#10B981' }}>
+                        {efectividadTotales.entregados.toLocaleString('es-CO')} (
+                        {efectividadTotales.pctEntregados.toFixed(1)}%)
+                      </Text>
+                    </Table.Summary.Cell>
+                  </Table.Summary.Row>
+                </Table.Summary>
+              ) : null
+            }
           />
         </Card>
 
