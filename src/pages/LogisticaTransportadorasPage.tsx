@@ -493,15 +493,20 @@ export default function LogisticaTransportadorasPage() {
                         {efectividadTotales.rechazados.toLocaleString('es-CO')}
                       </Text>
                     </Table.Summary.Cell>
-                    <Table.Summary.Cell
-                      index={6}
-                      align="right"
-                      style={{ background: 'rgba(16, 185, 129, 0.12)' }}
-                    >
-                      <Text strong style={{ color: '#10B981' }}>
-                        {efectividadTotales.entregados.toLocaleString('es-CO')} (
-                        {efectividadTotales.pctEntregados.toFixed(1)}%)
-                      </Text>
+                    <Table.Summary.Cell index={6} align="right">
+                      <div
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          borderRadius: 4,
+                          padding: '2px 8px',
+                          display: 'inline-block',
+                        }}
+                      >
+                        <Text strong style={{ color: '#10B981' }}>
+                          {efectividadTotales.entregados.toLocaleString('es-CO')} (
+                          {efectividadTotales.pctEntregados.toFixed(1)}%)
+                        </Text>
+                      </div>
                     </Table.Summary.Cell>
                   </Table.Summary.Row>
                 </Table.Summary>
