@@ -193,11 +193,25 @@ export const getComparativaGeografica = (
     top?: number;
     desde?: string;
     hasta?: string;
+    /** Solo con dimension=ciudad */
+    ciudad?: string;
   },
   opts?: { signal?: AbortSignal },
 ) =>
   api
     .get<ComparativaGeograficaResponse>('/reportes-logistica/comparativa-geografica', {
+      params,
+      signal: opts?.signal,
+    })
+    .then((r) => r.data);
+
+/** Ciudades con pedidos (y transportadora) en el rango; para filtro de comparativa. */
+export const getCiudadesComparativa = (
+  params?: { desde?: string; hasta?: string },
+  opts?: { signal?: AbortSignal },
+) =>
+  api
+    .get<string[]>('/reportes-logistica/ciudades-comparativa', {
       params,
       signal: opts?.signal,
     })

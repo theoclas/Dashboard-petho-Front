@@ -6,6 +6,7 @@ import {
   Empty,
   Flex,
   Input,
+  Select,
   Segmented,
   Space,
   Spin,
@@ -18,6 +19,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import type { AxiosError } from 'axios';
 import {
+  getCiudadesComparativa,
   getComparativaGeografica,
   getEfectividadTransportadoras,
   isRequestCanceled,
@@ -222,6 +224,9 @@ export default function LogisticaTransportadorasPage() {
   const [dimension, setDimension] = useState<'departamento' | 'ciudad'>('departamento');
   const [metrica, setMetrica] = useState<'efectividad' | 'devolucion'>('efectividad');
   const [empresaFilter, setEmpresaFilter] = useState('');
+  const [ciudadComparativa, setCiudadComparativa] = useState<string | undefined>();
+  const [ciudadesOptions, setCiudadesOptions] = useState<string[]>([]);
+  const [loadingCiudades, setLoadingCiudades] = useState(false);
 
   const rangeKey =
     range?.[0] && range?.[1]
@@ -246,6 +251,9 @@ export default function LogisticaTransportadorasPage() {
               dimension,
               metrica,
               top: 15,
+              ...(dimension === 'ciudad' && ciudadComparativa
+                ? { ciudad: ciudadComparativa }
+                : {}),
             },
             { signal: ac.signal },
           ),
@@ -264,7 +272,31 @@ export default function LogisticaTransportadorasPage() {
       active = false;
       ac.abort();
     };
-  }, [rangeKey, dimension, metrica, range]);
+  }, [rangeKey, dimension, metrica, range, ciudadComparativa]);
+
+  useEffect(() => {
+    if (dimension !== 'ciudad') {
+      setCiudadesOptions([]);
+      setLoadingCiudades(false);
+      return;
+    }
+    const ac = new AbortController();
+    setLoadingCiudades(true);
+    void (async () => {
+      try {
+        const desde = range?.[0]?.format('YYYY-MM-DD');
+        const hasta = range?.[1]?.format('YYYY-MM-DD');
+        const dateOpts = desde && hasta ? { desde, hasta } : {};
+        const list = await getCiudadesComparativa(dateOpts, { signal: ac.signal });
+        if (!ac.signal.aborted) setCiudadesOptions(list);
+      } catch (e: unknown) {
+        if (!ac.signal.aborted && !isRequestCanceled(e)) setCiudadesOptions([]);
+      } finally {
+        if (!ac.signal.aborted) setLoadingCiudades(false);
+      }
+    })();
+    return () => ac.abort();
+  }, [dimension, rangeKey, range]);
 
   const filteredRows = useMemo(() => {
     const q = empresaFilter.trim().toLowerCase();
@@ -536,7 +568,11 @@ export default function LogisticaTransportadorasPage() {
                 <span id="logistica-comparativa-title">Comparativa de Transportadoras</span>
               </Space>
               <Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-                Analiza el rendimiento geográfico (Top 15)
+                {dimension === 'ciudad' && ciudadComparativa
+                  ? `Ciudad: ${ciudadComparativa} · transportadoras en el rango de fechas`
+                  : dimension === 'ciudad'
+                    ? 'Top 15 ciudades por volumen, o elige una ciudad para detalle'
+                    : 'Top 15 departamentos por volumen en el rango de fechas'}
               </Text>
             </Space>
           }
@@ -545,7 +581,11 @@ export default function LogisticaTransportadorasPage() {
               <Segmented
                 size="small"
                 value={dimension}
-                onChange={(v) => setDimension(v as 'departamento' | 'ciudad')}
+                onChange={(v) => {
+                  const d = v as 'departamento' | 'ciudad';
+                  setDimension(d);
+                  if (d !== 'ciudad') setCiudadComparativa(undefined);
+                }}
                 options={[
                   { label: 'Departamentos', value: 'departamento' },
                   { label: 'Ciudades', value: 'ciudad' },
@@ -563,6 +603,26 @@ export default function LogisticaTransportadorasPage() {
             </Flex>
           }
         >
+          {dimension === 'ciudad' ? (
+            <Space wrap align="center" style={{ marginBottom: 12 }}>
+              <Text type="secondary">Ciudad (opcional):</Text>
+              <Select
+                showSearch
+                allowClear
+                placeholder="Todas — top 15 por volumen"
+                options={ciudadesOptions.map((c) => ({ label: c, value: c }))}
+                value={ciudadComparativa}
+                onChange={(v) => setCiudadComparativa(v ?? undefined)}
+                style={{ minWidth: 260, maxWidth: 360 }}
+                loading={loadingCiudades}
+                filterOption={(input, opt) =>
+                  String(opt?.label ?? '')
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+              />
+            </Space>
+          ) : null}
           {chartData.length === 0 ? (
             <Empty description="Sin datos para el gráfico con los filtros actuales" />
           ) : (
@@ -575,7 +635,7 @@ export default function LogisticaTransportadorasPage() {
               }}
             >
               <div
-                key={`${dimension}-${metrica}-${rangeKey}`}
+                key={`${dimension}-${metrica}-${rangeKey}-${ciudadComparativa ?? ''}`}
                 style={{ minWidth: comparativaMinWidth, paddingTop: 8 }}
               >
                 <ComparativaGeograficaBars
