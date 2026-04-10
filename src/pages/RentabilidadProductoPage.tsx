@@ -3,16 +3,21 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
+  Col,
   DatePicker,
+  Divider,
   Empty,
   Flex,
   Input,
+  InputNumber,
+  Row,
   Space,
   Spin,
   Table,
   Typography,
 } from 'antd';
-import { AppstoreOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { TablePaginationConfig } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
@@ -21,6 +26,7 @@ import type { AxiosError } from 'axios';
 import {
   getRentabilidadPorProducto,
   isRequestCanceled,
+  type RentabilidadPorProductoFilters,
   type RentabilidadProductoRow,
 } from '../api';
 import { useDashboardNav } from '../contexts/DashboardNavContext';
@@ -45,12 +51,33 @@ const cardSurface = {
   border: '1px solid rgba(255,255,255,0.06)',
 } as const;
 
+/** `true` para volver a mostrar filtros por columna (min/máx); el código del backend y helpers siguen activos. */
+const SHOW_RENTABILIDAD_COLUMN_FILTERS = false;
+
+const EMPTY_NUMERIC_FILTERS: Partial<RentabilidadPorProductoFilters> = {};
+
 function formatCop(n: number) {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
     maximumFractionDigits: 0,
   }).format(n);
+}
+
+function cleanNumericFilters(
+  f: Partial<RentabilidadPorProductoFilters>,
+): Partial<RentabilidadPorProductoFilters> {
+  const out: Partial<RentabilidadPorProductoFilters> = {};
+  for (const [k, v] of Object.entries(f)) {
+    if (typeof v === 'number' && !Number.isNaN(v)) {
+      (out as Record<string, number>)[k] = v;
+    }
+  }
+  return out;
+}
+
+function countActiveFilters(f: Partial<RentabilidadPorProductoFilters>): number {
+  return Object.keys(cleanNumericFilters(f)).length;
 }
 
 function errMsg(e: unknown): string {
@@ -74,8 +101,11 @@ export default function RentabilidadProductoPage() {
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterDraft, setFilterDraft] = useState<Partial<RentabilidadPorProductoFilters>>({});
+  const [numericFilters, setNumericFilters] = useState<Partial<RentabilidadPorProductoFilters>>({});
   const [sortBy, setSortBy] = useState<RentabilidadSortBy>('utilidad');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const rangeKey =
     range?.[0] && range?.[1]
@@ -87,9 +117,40 @@ export default function RentabilidadProductoPage() {
     return () => window.clearTimeout(t);
   }, [searchInput]);
 
+  useEffect(() => {
+    const t = window.setTimeout(() => setNumericFilters(cleanNumericFilters(filterDraft)), 400);
+    return () => window.clearTimeout(t);
+  }, [filterDraft]);
+
+  const appliedNumericFilters = SHOW_RENTABILIDAD_COLUMN_FILTERS
+    ? numericFilters
+    : EMPTY_NUMERIC_FILTERS;
+  const filtersKey = SHOW_RENTABILIDAD_COLUMN_FILTERS
+    ? JSON.stringify(numericFilters)
+    : '__column_filters_hidden__';
+  const hasNumericFiltersApplied =
+    SHOW_RENTABILIDAD_COLUMN_FILTERS && Object.keys(numericFilters).length > 0;
+
   useLayoutEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, rangeKey, sortBy, sortOrder, limit]);
+  }, [debouncedSearch, rangeKey, sortBy, sortOrder, limit, filtersKey]);
+
+  const patchNumericFilter = (patch: Partial<RentabilidadPorProductoFilters>) => {
+    setFilterDraft((prev) => {
+      const next: Partial<RentabilidadPorProductoFilters> = { ...prev, ...patch };
+      for (const [k, v] of Object.entries(next)) {
+        if (v == null || (typeof v === 'number' && Number.isNaN(v))) {
+          delete (next as Record<string, unknown>)[k];
+        }
+      }
+      return next;
+    });
+  };
+
+  const clearNumericFilters = () => {
+    setFilterDraft({});
+    setNumericFilters({});
+  };
 
   useEffect(() => {
     const ac = new AbortController();
@@ -108,6 +169,7 @@ export default function RentabilidadProductoPage() {
             sortBy,
             order: sortOrder,
             search: debouncedSearch || undefined,
+            ...appliedNumericFilters,
           },
           { signal: ac.signal },
         );
@@ -125,7 +187,18 @@ export default function RentabilidadProductoPage() {
       active = false;
       ac.abort();
     };
-  }, [currentPage, rangeKey, debouncedSearch, sortBy, sortOrder, limit, range]);
+  }, [
+    currentPage,
+    rangeKey,
+    debouncedSearch,
+    sortBy,
+    sortOrder,
+    limit,
+    range,
+    filtersKey,
+    appliedNumericFilters,
+    refreshNonce,
+  ]);
 
   const sortOrderForCol = (key: RentabilidadSortBy) =>
     sortBy === key ? (sortOrder === 'asc' ? ('ascend' as const) : ('descend' as const)) : undefined;
@@ -260,13 +333,20 @@ export default function RentabilidadProductoPage() {
           Rentabilidad por producto
         </Title>
         <Text type="secondary">
-          Listado según productos en CPA en el período; logística y ventas desde pedidos (nombre CPA contenido en
-          nombre Dropi o igualdad). Pauta desde CPA.
+          Pauta y columnas de logística (ENTR, TRÁN, DEV, %) salen de pedidos enlazados por nombre con el producto
+          CPA. Si no hay coincidencia con Dropi, ventas y utilidad usan el total facturado y la utilidad aproximada
+          del CPA importado para ese producto en el rango.
         </Text>
       </div>
 
       <Card size="small" style={cardSurface} styles={{ body: { padding: '12px 16px' } }}>
-        <Space wrap align="center">
+        <Space
+          direction={SHOW_RENTABILIDAD_COLUMN_FILTERS ? 'vertical' : 'horizontal'}
+          size={SHOW_RENTABILIDAD_COLUMN_FILTERS ? 'middle' : undefined}
+          style={{ width: '100%' }}
+          wrap
+          align="center"
+        >
           <Text type="secondary">Rango de fechas (opcional):</Text>
           <RangePicker
             value={range}
@@ -282,6 +362,244 @@ export default function RentabilidadProductoPage() {
             onChange={(e) => setSearchInput(e.target.value)}
             style={{ width: 260 }}
           />
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => setRefreshNonce((n) => n + 1)}
+            loading={loading}
+          >
+            Recargar
+          </Button>
+          {SHOW_RENTABILIDAD_COLUMN_FILTERS ? (
+            <>
+          <Divider style={{ margin: 0, borderColor: 'rgba(255,255,255,0.08)' }} />
+          <Collapse
+            bordered={false}
+            style={{ background: 'transparent' }}
+            items={[
+              {
+                key: 'numeric',
+                label: (
+                  <Flex justify="space-between" align="center" style={{ width: '100%', paddingRight: 8 }}>
+                    <span>
+                      Filtros por columna (min / max)
+                      {countActiveFilters(filterDraft) > 0 ? (
+                        <Text type="secondary"> — {countActiveFilters(filterDraft)} activo(s)</Text>
+                      ) : null}
+                    </span>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearNumericFilters();
+                      }}
+                    >
+                      Limpiar filtros
+                    </Button>
+                  </Flex>
+                ),
+                children: (
+                  <Row gutter={[12, 14]}>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        ENTR
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minEntr}
+                          onChange={(v) => patchNumericFilter({ minEntr: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxEntr}
+                          onChange={(v) => patchNumericFilter({ maxEntr: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        % EFEC.
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          max={100}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minPctEfectividad}
+                          onChange={(v) => patchNumericFilter({ minPctEfectividad: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          max={100}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxPctEfectividad}
+                          onChange={(v) => patchNumericFilter({ maxPctEfectividad: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        TRÁN
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minTran}
+                          onChange={(v) => patchNumericFilter({ minTran: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxTran}
+                          onChange={(v) => patchNumericFilter({ maxTran: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        % TRÁN.
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          max={100}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minPctTransito}
+                          onChange={(v) => patchNumericFilter({ minPctTransito: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          max={100}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxPctTransito}
+                          onChange={(v) => patchNumericFilter({ maxPctTransito: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        DEV
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minDev}
+                          onChange={(v) => patchNumericFilter({ minDev: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxDev}
+                          onChange={(v) => patchNumericFilter({ maxDev: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        % DEV.
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          max={100}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minPctDevolucion}
+                          onChange={(v) => patchNumericFilter({ minPctDevolucion: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          max={100}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxPctDevolucion}
+                          onChange={(v) => patchNumericFilter({ maxPctDevolucion: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        VENTAS (COP)
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minVentas}
+                          onChange={(v) => patchNumericFilter({ minVentas: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxVentas}
+                          onChange={(v) => patchNumericFilter({ maxVentas: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        PAUTA (COP)
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.minPauta}
+                          onChange={(v) => patchNumericFilter({ minPauta: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          min={0}
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxPauta}
+                          onChange={(v) => patchNumericFilter({ maxPauta: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                        UTILIDAD (COP)
+                      </Text>
+                      <Flex gap={8}>
+                        <InputNumber
+                          placeholder="Mín"
+                          style={{ flex: 1 }}
+                          value={filterDraft.minUtilidad}
+                          onChange={(v) => patchNumericFilter({ minUtilidad: v ?? undefined })}
+                        />
+                        <InputNumber
+                          placeholder="Máx"
+                          style={{ flex: 1 }}
+                          value={filterDraft.maxUtilidad}
+                          onChange={(v) => patchNumericFilter({ maxUtilidad: v ?? undefined })}
+                        />
+                      </Flex>
+                    </Col>
+                  </Row>
+                ),
+              },
+            ]}
+          />
+            </>
+          ) : null}
         </Space>
       </Card>
 
@@ -336,9 +654,11 @@ export default function RentabilidadProductoPage() {
                   description={
                     debouncedSearch
                       ? 'Sin resultados para la búsqueda'
-                      : range?.[0] && range?.[1]
-                        ? 'No hay productos con datos en este rango de fechas'
-                        : 'No hay datos de productos para mostrar'
+                      : hasNumericFiltersApplied
+                        ? 'Sin resultados con los filtros por columna actuales'
+                        : range?.[0] && range?.[1]
+                          ? 'No hay productos con datos en este rango de fechas'
+                          : 'No hay datos de productos para mostrar'
                   }
                 />
               ),

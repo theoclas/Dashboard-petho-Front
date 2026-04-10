@@ -237,6 +237,27 @@ export type RentabilidadPorProductoResponse = {
   limit: number;
 };
 
+export type RentabilidadPorProductoFilters = {
+  minEntr?: number;
+  maxEntr?: number;
+  minTran?: number;
+  maxTran?: number;
+  minDev?: number;
+  maxDev?: number;
+  minPctEfectividad?: number;
+  maxPctEfectividad?: number;
+  minPctTransito?: number;
+  maxPctTransito?: number;
+  minPctDevolucion?: number;
+  maxPctDevolucion?: number;
+  minVentas?: number;
+  maxVentas?: number;
+  minPauta?: number;
+  maxPauta?: number;
+  minUtilidad?: number;
+  maxUtilidad?: number;
+};
+
 export const getRentabilidadPorProducto = (
   params?: {
     desde?: string;
@@ -246,7 +267,7 @@ export const getRentabilidadPorProducto = (
     sortBy?: string;
     order?: 'asc' | 'desc';
     search?: string;
-  },
+  } & RentabilidadPorProductoFilters,
   opts?: { signal?: AbortSignal },
 ) =>
   api
