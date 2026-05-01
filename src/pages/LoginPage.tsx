@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Form, Input, Button, Typography, message } from 'antd';
+import { Card, Form, Input, Button, Typography, message, Select } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
@@ -9,15 +9,24 @@ const { Title, Text } = Typography;
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<'credentials' | 'company'>('credentials');
+  const [pendingCreds, setPendingCreds] = useState<{ username: string; password: string } | null>(null);
+  const [availableCompanies, setAvailableCompanies] = useState<Array<{ id: number; nombre: string }>>([]);
   const { login } = useAuth();
 
-  const onFinish = async (values: any) => {
+  const onFinishCredentials = async (values: any) => {
     setLoading(true);
     try {
       const payload = { ...values, username: values.username?.trim() };
       const { data } = await api.post('/auth/login', payload);
-      login(data.access_token, data.user);
-      window.location.href = '/';
+      const companies = (data?.companies ?? []) as Array<{ id: number; nombre: string }>;
+      if (!companies.length) {
+        message.error('Tu usuario no tiene empresas activas asignadas.');
+        return;
+      }
+      setPendingCreds({ username: payload.username, password: payload.password });
+      setAvailableCompanies(companies);
+      setStep('company');
     } catch (err: any) {
       console.error('Login error:', err);
       if (err.response?.status === 401) {
@@ -27,6 +36,24 @@ export default function LoginPage() {
       } else {
         message.error('Error de conexión al iniciar sesión');
       }
+    }
+    setLoading(false);
+  };
+
+  const onFinishCompany = async (values: { companyId: number }) => {
+    if (!pendingCreds) return;
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/select-company', {
+        username: pendingCreds.username,
+        password: pendingCreds.password,
+        companyId: values.companyId,
+      });
+      login(data.access_token, data.user, availableCompanies);
+      window.location.href = '/';
+    } catch (err: any) {
+      console.error('Select company error:', err);
+      message.error(err?.response?.data?.message || 'No fue posible abrir la empresa seleccionada');
     }
     setLoading(false);
   };
@@ -66,32 +93,55 @@ export default function LoginPage() {
           <Text type="secondary">Inicia sesión en tu cuenta</Text>
         </div>
 
-        <Form name="login" onFinish={onFinish} layout="vertical">
-          <Form.Item
-            name="username"
-            rules={[{ required: true, message: 'Ingresa tu usuario' }]}
-          >
-            <Input prefix={<UserOutlined />} placeholder="Nombre de usuario" size="large" />
-          </Form.Item>
+        {step === 'credentials' ? (
+          <Form name="login" onFinish={onFinishCredentials} layout="vertical">
+            <Form.Item
+              name="username"
+              rules={[{ required: true, message: 'Ingresa tu usuario' }]}
+            >
+              <Input prefix={<UserOutlined />} placeholder="Nombre de usuario" size="large" />
+            </Form.Item>
 
-          <Form.Item
-            name="password"
-            rules={[{ required: true, message: 'Ingresa tu contraseña' }]}
-          >
-            <Input.Password prefix={<LockOutlined />} placeholder="Contraseña" size="large" />
-          </Form.Item>
+            <Form.Item
+              name="password"
+              rules={[{ required: true, message: 'Ingresa tu contraseña' }]}
+            >
+              <Input.Password prefix={<LockOutlined />} placeholder="Contraseña" size="large" />
+            </Form.Item>
 
-          <Form.Item>
-            <Button type="primary" htmlType="submit" style={{ width: '100%' }} size="large" loading={loading}>
-              Ingresar
+            <Form.Item>
+              <Button type="primary" htmlType="submit" style={{ width: '100%' }} size="large" loading={loading}>
+                Continuar
+              </Button>
+            </Form.Item>
+            <div style={{ textAlign: 'center' }}>
+              <Text type="secondary">
+                ¿No tienes cuenta? <a href="/register" style={{ color: '#6366f1' }}>Regístrate</a>
+              </Text>
+            </div>
+          </Form>
+        ) : (
+          <Form name="select-company" onFinish={onFinishCompany} layout="vertical">
+            <Form.Item
+              name="companyId"
+              rules={[{ required: true, message: 'Selecciona una empresa' }]}
+            >
+              <Select
+                size="large"
+                placeholder="Selecciona la empresa"
+                options={availableCompanies.map((c) => ({ value: c.id, label: c.nombre }))}
+              />
+            </Form.Item>
+            <Form.Item>
+              <Button type="primary" htmlType="submit" style={{ width: '100%' }} size="large" loading={loading}>
+                Ingresar
+              </Button>
+            </Form.Item>
+            <Button type="link" onClick={() => setStep('credentials')} style={{ padding: 0 }}>
+              Volver
             </Button>
-          </Form.Item>
-          <div style={{ textAlign: 'center' }}>
-            <Text type="secondary">
-              ¿No tienes cuenta? <a href="/register" style={{ color: '#6366f1' }}>Regístrate</a>
-            </Text>
-          </div>
-        </Form>
+          </Form>
+        )}
       </Card>
     </div>
   );

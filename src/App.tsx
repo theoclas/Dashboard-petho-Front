@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Layout, Menu, theme, ConfigProvider, Button, Space } from 'antd';
+import { Layout, Menu, theme, ConfigProvider, Button, Space, Select } from 'antd';
 import {
   DashboardOutlined,
   OrderedListOutlined,
@@ -7,6 +7,7 @@ import {
   SettingOutlined,
   LogoutOutlined,
   TeamOutlined,
+  ShopOutlined,
   BarChartOutlined,
   TableOutlined,
   TruckOutlined,
@@ -18,6 +19,7 @@ import PedidosPage from './pages/PedidosPage';
 import ImportWizard from './pages/ImportWizard';
 import MapeoEstadosPage from './pages/MapeoEstadosPage';
 import UsersPage from './pages/UsersPage';
+import EmpresasPage from './pages/EmpresasPage';
 import CpaPage from './pages/CpaPage';
 import CpaResumenDiarioPage from './pages/CpaResumenDiarioPage';
 import LogisticaTransportadorasPage from './pages/LogisticaTransportadorasPage';
@@ -45,7 +47,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const { token: themeToken } = theme.useToken();
-  const { user, logout } = useAuth();
+  const { user, companies, switchCompany, logout } = useAuth();
   
   // React Router
   const location = useLocation();
@@ -81,6 +83,7 @@ function MainLayout() {
     if (user?.role === 'ADMIN') {
       items.push({ key: 'mapeo', icon: <SettingOutlined />, label: 'Mapeo Estados' });
       items.push({ key: 'usuarios', icon: <TeamOutlined />, label: 'Usuarios' });
+      items.push({ key: 'empresas', icon: <ShopOutlined />, label: 'Empresas' });
     }
 
     return items;
@@ -98,6 +101,8 @@ function MainLayout() {
         return <MapeoEstadosPage />;
       case 'usuarios':
         return <UsersPage />;
+      case 'empresas':
+        return <EmpresasPage />;
       case 'cpa':
         return <CpaPage />;
       case 'cpa-resumen':
@@ -173,6 +178,16 @@ function MainLayout() {
             Gestión de pedidos Dropi — J&D
           </span>
           <Space>
+            <Select
+              size="small"
+              style={{ minWidth: 220 }}
+              value={user?.companyId}
+              options={companies.map((company) => ({ value: company.id, label: company.nombre }))}
+              onChange={async (companyId) => {
+                await switchCompany(companyId);
+                window.location.reload();
+              }}
+            />
             <span style={{ color: '#fff', marginRight: 10 }}>Hola, {user?.username} ({user?.role})</span>
             <Button type="primary" danger icon={<LogoutOutlined />} onClick={logout}>
               Salir

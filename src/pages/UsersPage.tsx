@@ -13,12 +13,20 @@ import {
   Switch,
   Space,
 } from 'antd';
-import { ReloadOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ReloadOutlined, UserAddOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import api from '../api';
+import api, {
+  assignEmpresaToUser,
+  getEmpresas,
+  getUserEmpresaAssignments,
+  isMasterAdminEmail,
+  removeUserEmpresa,
+  type Empresa,
+  type UserEmpresaAssignment,
+} from '../api';
 import { useAuth } from '../contexts/AuthContext';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Option } = Select;
 
 interface User {
@@ -37,6 +45,13 @@ export default function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [form] = Form.useForm();
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignUser, setAssignUser] = useState<User | null>(null);
+  const [assignments, setAssignments] = useState<UserEmpresaAssignment[]>([]);
+  const [empresasPick, setEmpresasPick] = useState<Empresa[]>([]);
+  const [assignEmpresaId, setAssignEmpresaId] = useState<number | undefined>();
+  const [assignLoading, setAssignLoading] = useState(false);
+  const masterUi = isMasterAdminEmail(currentUser?.email);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -88,6 +103,62 @@ export default function UsersPage() {
     form.resetFields();
   };
 
+  const loadAssignData = async (userId: number) => {
+    setAssignLoading(true);
+    try {
+      const [rows, emps] = await Promise.all([getUserEmpresaAssignments(userId), getEmpresas()]);
+      setAssignments(rows);
+      setEmpresasPick(emps.filter((e) => e.is_active));
+      const available = emps.filter(
+        (e) => e.is_active && !rows.some((r) => r.empresa_id === e.id && r.is_active),
+      );
+      setAssignEmpresaId(available[0]?.id);
+    } catch {
+      message.error('No fue posible cargar empresas del usuario');
+    }
+    setAssignLoading(false);
+  };
+
+  const openAssignModal = (u: User) => {
+    setAssignUser(u);
+    setAssignOpen(true);
+    void loadAssignData(u.id);
+  };
+
+  const closeAssignModal = () => {
+    setAssignOpen(false);
+    setAssignUser(null);
+    setAssignments([]);
+    setEmpresasPick([]);
+    setAssignEmpresaId(undefined);
+  };
+
+  const handleAddEmpresa = async () => {
+    if (!assignUser || !assignEmpresaId) return;
+    try {
+      await assignEmpresaToUser(assignUser.id, assignEmpresaId);
+      message.success('Empresa asignada');
+      await loadAssignData(assignUser.id);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string | string[] } } };
+      const msg = e.response?.data?.message;
+      message.error(Array.isArray(msg) ? String(msg[0]) : msg || 'No fue posible asignar la empresa');
+    }
+  };
+
+  const handleRemoveEmpresa = async (empresaId: number) => {
+    if (!assignUser) return;
+    try {
+      await removeUserEmpresa(assignUser.id, empresaId);
+      message.success('Empresa desvinculada');
+      await loadAssignData(assignUser.id);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string | string[] } } };
+      const msg = e.response?.data?.message;
+      message.error(Array.isArray(msg) ? String(msg[0]) : msg || 'No fue posible quitar la empresa');
+    }
+  };
+
   const handleCreateUser = async () => {
     try {
       const values = await form.validateFields();
@@ -99,7 +170,11 @@ export default function UsersPage() {
         role: values.role,
         is_active: values.is_active,
       });
-      message.success('Usuario creado');
+      message.success(
+        masterUi
+          ? 'Usuario creado. Asígnale al menos una empresa para que pueda iniciar sesión.'
+          : 'Usuario creado. El administrador principal debe asignarle empresas para que pueda iniciar sesión.',
+      );
       closeCreateModal();
       fetchUsers();
     } catch (err: unknown) {
@@ -161,6 +236,11 @@ export default function UsersPage() {
             : undefined;
         return (
           <Space size="small" wrap>
+            {masterUi && (
+              <Button size="small" icon={<ApartmentOutlined />} onClick={() => openAssignModal(record)}>
+                Empresas
+              </Button>
+            )}
             <Popconfirm
               title={`¿${record.is_active ? 'Desactivar' : 'Activar'} este usuario?`}
               onConfirm={() => handleUpdateUser(record.id, { is_active: !record.is_active })}
@@ -212,6 +292,12 @@ export default function UsersPage() {
           </Button>
         </Space>
       </div>
+      {currentUser?.role === 'ADMIN' && !masterUi && (
+        <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+          La asignación de empresas a cada usuario la realiza únicamente el administrador principal (correo
+          configurado en el sistema).
+        </Text>
+      )}
       <Table<User>
         columns={columns}
         dataSource={users}
@@ -287,6 +373,65 @@ export default function UsersPage() {
             <Switch />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={assignUser ? `Empresas — ${assignUser.username}` : 'Empresas'}
+        open={assignOpen}
+        onCancel={closeAssignModal}
+        footer={null}
+        width={560}
+        destroyOnClose
+      >
+        <Table<UserEmpresaAssignment>
+          size="small"
+          loading={assignLoading}
+          rowKey="empresa_id"
+          pagination={false}
+          dataSource={assignments}
+          columns={[
+            { title: 'Empresa', dataIndex: 'nombre' },
+            {
+              title: 'Estado',
+              width: 110,
+              dataIndex: 'is_active',
+              render: (v: boolean) => (
+                <Tag color={v ? 'green' : 'default'}>{v ? 'Activa' : 'Inactiva'}</Tag>
+              ),
+            },
+            {
+              title: '',
+              width: 100,
+              render: (_, row) =>
+                row.is_active ? (
+                  <Popconfirm
+                    title="¿Quitar esta empresa al usuario?"
+                    okText="Quitar"
+                    cancelText="Cancelar"
+                    onConfirm={() => handleRemoveEmpresa(row.empresa_id)}
+                  >
+                    <Button size="small" danger type="link">
+                      Quitar
+                    </Button>
+                  </Popconfirm>
+                ) : null,
+            },
+          ]}
+        />
+        <Space style={{ marginTop: 16 }} wrap>
+          <Select
+            placeholder="Empresa a asignar"
+            style={{ minWidth: 220 }}
+            value={assignEmpresaId}
+            onChange={setAssignEmpresaId}
+            options={empresasPick
+              .filter((e) => !assignments.some((a) => a.empresa_id === e.id && a.is_active))
+              .map((e) => ({ label: e.nombre, value: e.id }))}
+          />
+          <Button type="primary" onClick={handleAddEmpresa} disabled={!assignEmpresaId}>
+            Agregar
+          </Button>
+        </Space>
       </Modal>
     </div>
   );

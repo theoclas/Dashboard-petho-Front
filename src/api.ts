@@ -9,9 +9,20 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('petho_token');
+  const userRaw = localStorage.getItem('petho_user');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     config.headers['x-auth-token'] = token; // Respaldo para Hostinger/Apache
+  }
+  if (userRaw) {
+    try {
+      const user = JSON.parse(userRaw) as { companyId?: number };
+      if (user?.companyId) {
+        config.headers['x-company-id'] = String(user.companyId);
+      }
+    } catch {
+      // Ignorar user inválido en storage
+    }
   }
   return config;
 });
@@ -22,6 +33,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('petho_token');
       localStorage.removeItem('petho_user');
+      localStorage.removeItem('petho_companies');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -322,5 +334,49 @@ export const wipeCpaTable = (password: string) =>
   api
     .post<WipeCpaResponse>('/import/wipe-cpa', { password }, { timeout: 120000 })
     .then((r) => r.data);
+
+// ── Empresas ──
+export type Empresa = {
+  id: number;
+  nombre: string;
+  slug: string;
+  is_active: boolean;
+};
+
+export const getEmpresas = () =>
+  api.get<Empresa[]>('/empresas').then((r) => r.data);
+
+export const createEmpresa = (data: { nombre: string; slug: string; is_active?: boolean }) =>
+  api.post<Empresa>('/empresas', data).then((r) => r.data);
+
+export const updateEmpresa = (id: number, data: Partial<{ nombre: string; slug: string; is_active: boolean }>) =>
+  api.patch<Empresa>(`/empresas/${id}`, data).then((r) => r.data);
+
+export const deleteEmpresa = (id: number) =>
+  api.delete(`/empresas/${id}`).then((r) => r.data);
+
+export const assignAllDataToEmpresa = (id: number) =>
+  api.post(`/empresas/${id}/asignar-data-existente`).then((r) => r.data);
+
+/** Mismo valor que MASTER_ADMIN_EMAIL en el servidor (solo UI). */
+export function isMasterAdminEmail(email: string | undefined): boolean {
+  const m = import.meta.env.VITE_MASTER_ADMIN_EMAIL?.trim().toLowerCase();
+  return Boolean(m && email && email.trim().toLowerCase() === m);
+}
+
+export type UserEmpresaAssignment = {
+  empresa_id: number;
+  nombre: string;
+  is_active: boolean;
+};
+
+export const getUserEmpresaAssignments = (userId: number) =>
+  api.get<UserEmpresaAssignment[]>(`/users/${userId}/empresas`).then((r) => r.data);
+
+export const assignEmpresaToUser = (userId: number, empresa_id: number) =>
+  api.post<{ ok: true }>(`/users/${userId}/empresas`, { empresa_id }).then((r) => r.data);
+
+export const removeUserEmpresa = (userId: number, empresaId: number) =>
+  api.delete<{ ok: true }>(`/users/${userId}/empresas/${empresaId}`).then((r) => r.data);
 
 export default api;

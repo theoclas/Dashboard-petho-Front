@@ -169,13 +169,6 @@ export default function CpaResumenDiarioPage() {
         render: (_, r) => fmtNum(r.metrics.sumVentas),
       },
       {
-        title: colTitle('Gan. (prom.)', 'Promedio de ganancia promedio por fila en el nodo.'),
-        key: 'gan',
-        align: 'right',
-        width: 120,
-        render: (_, r) => fmtMoney(r.metrics.avgGananciaPromedio),
-      },
-      {
         title: colTitle('CPA pond.', 'Σ gasto ÷ Σ ventas en el nodo.'),
         key: 'cpaP',
         align: 'right',
@@ -190,10 +183,25 @@ export default function CpaResumenDiarioPage() {
         render: (_, r) => fmtMoney(r.metrics.avgCpa),
       },
       {
-        title: colTitle('Utilidad aprox.', 'Suma de utilidad aproximada.'),
+        title: colTitle(
+          'Ganancia (prom.)',
+          'Promedio aritmético del campo “ganancia promedio” en las filas CPA del nodo (equivalente a GANANCIA (Prom) en un pivot de Excel). No es Σ(ganancia×ventas)/Σ(ventas).',
+        ),
+        key: 'gan',
+        align: 'right',
+        width: 138,
+        fixed: 'right',
+        render: (_, r) => fmtMoney(r.metrics.avgGananciaPromedio),
+      },
+      {
+        title: colTitle(
+          'Utilidad aprox.',
+          'Suma de utilidad por fila recalculada en el sistema: (ganancia promedio × ventas) − gasto publicidad, con redondeo por fila. Si en el Excel la columna UTILIDAD fue editada o quedó desalineada con esa fórmula, un pivot que sume la celda tal cual dará otro total que este valor.',
+        ),
         key: 'util',
         align: 'right',
-        width: 128,
+        width: 140,
+        fixed: 'right',
         render: (_, r) => fmtMoney(r.metrics.sumUtilidad),
       },
     ],
@@ -265,7 +273,7 @@ export default function CpaResumenDiarioPage() {
               Total del período
             </Text>
             <Row gutter={[16, 16]}>
-              <Col xs={12} sm={8} md={6}>
+              <Col xs={12} sm={8} md={6} lg={4}>
                 <Statistic
                   title="Gasto publicidad"
                   value={data.total.sumGasto}
@@ -273,10 +281,10 @@ export default function CpaResumenDiarioPage() {
                   valueStyle={{ fontSize: 16 }}
                 />
               </Col>
-              <Col xs={12} sm={8} md={6}>
+              <Col xs={12} sm={8} md={6} lg={4}>
                 <Statistic title="Ventas" value={data.total.sumVentas} valueStyle={{ fontSize: 16 }} />
               </Col>
-              <Col xs={12} sm={8} md={6}>
+              <Col xs={12} sm={8} md={6} lg={4}>
                 <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
                   CPA ponderado
                 </Text>
@@ -284,13 +292,33 @@ export default function CpaResumenDiarioPage() {
                   {data.total.cpaPonderado != null ? fmtMoney(data.total.cpaPonderado) : '—'}
                 </Text>
               </Col>
-              <Col xs={12} sm={8} md={6}>
+              <Col xs={12} sm={8} md={6} lg={4}>
                 <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
                   CPA promedio
                 </Text>
                 <Text strong style={{ fontSize: 16 }}>
                   {data.total.avgCpa != null ? fmtMoney(data.total.avgCpa) : '—'}
                 </Text>
+              </Col>
+              <Col xs={12} sm={8} md={6} lg={4}>
+                <Tooltip title="Igual que la columna Ganancia (prom.) del resumen: promedio del campo ganancia promedio por fila CPA.">
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                    Ganancia (prom.) <QuestionCircleOutlined style={{ opacity: 0.45, fontSize: 11 }} />
+                  </Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {fmtMoney(data.total.avgGananciaPromedio)}
+                  </Text>
+                </Tooltip>
+              </Col>
+              <Col xs={12} sm={8} md={6} lg={4}>
+                <Tooltip title="Suma de (ganancia × ventas − gasto) por fila ya persistida en BD; puede diferir de sumar la columna UTILIDAD del Excel si esa columna no sigue la fórmula en todas las filas.">
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                    Utilidad aprox. <QuestionCircleOutlined style={{ opacity: 0.45, fontSize: 11 }} />
+                  </Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {fmtMoney(data.total.sumUtilidad)}
+                  </Text>
+                </Tooltip>
               </Col>
             </Row>
           </Card>
@@ -311,7 +339,7 @@ export default function CpaResumenDiarioPage() {
                 dataSource={treeData}
                 pagination={false}
                 loading={loading}
-                scroll={{ x: 1280 }}
+                scroll={{ x: 1180 }}
                 size="small"
                 expandable={{ defaultExpandAllRows: false }}
               />
